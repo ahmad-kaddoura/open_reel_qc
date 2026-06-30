@@ -7,9 +7,10 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-  Loader2, AlertCircle, Download, Eye, RotateCcw, Trash2, Film,
+  Loader2, AlertCircle, Download, Eye, RotateCcw, Trash2, Film, Layers,
 } from 'lucide-react';
 import { useWorkflowStore } from '@/features/workflow/store';
+import { useProjectStore } from '@/features/project/store';
 
 function downloadAsset(url: string, filename: string) {
   const a = document.createElement('a');
@@ -23,12 +24,49 @@ function downloadAsset(url: string, filename: string) {
 }
 
 function OutputNodeComponent({ data }: NodeProps) {
-  const sceneId = (data as { sceneId: string }).sceneId;
-  const scene = useWorkflowStore((s) => s.sceneMap[sceneId]);
+  const final = Boolean((data as { final?: boolean }).final);
+  const sceneId = (data as { sceneId?: string }).sceneId;
+  const scenes = useWorkflowStore((s) => s.getScenes());
+  const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
+  const setPhase = useProjectStore((s) => s.setPhase);
+  const scene = useWorkflowStore((s) => sceneId ? s.sceneMap[sceneId] : undefined);
   const clearSceneOutput = useWorkflowStore((s) => s.clearSceneOutput);
   const retrySceneGeneration = useWorkflowStore((s) => s.retrySceneGeneration);
 
-  if (!scene) return null;
+  if (final) {
+    const completed = scenes.filter((item) => item.status === 'completed').length;
+    const totalDuration = scenes.length ? scenes[scenes.length - 1].endTime : 0;
+    const allComplete = scenes.length > 0 && completed === scenes.length;
+    return (
+      <div className="relative">
+        <Handle type="target" position={Position.Left} id="output-in" className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
+        <div className="w-[240px] rounded-xl border-2 border-emerald-500/60 bg-card shadow-xl overflow-hidden">
+          <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
+            <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Final Output</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400">
+                <Layers className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold">Connected Timeline Render</div>
+                <div className="text-[10px] text-muted-foreground">{completed}/{scenes.length} scenes ready · {totalDuration}s</div>
+              </div>
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              Combines all connected scene videos in sequence and sends them to Timeline for trim, rearrange, preview, and export.
+            </p>
+            <Button size="sm" className="h-7 w-full gap-1.5 text-xs" onClick={() => allComplete ? setPhase('timeline') : generateAllScenes()}>
+              {allComplete ? 'Open Timeline' : 'Generate Connected Scenes'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sceneId || !scene) return null;
 
   const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
   const isQueued = scene.status === 'queued';
@@ -56,6 +94,12 @@ function OutputNodeComponent({ data }: NodeProps) {
         type="target"
         position={Position.Left}
         id="output-in"
+        className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="output-out"
         className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background"
       />
 
@@ -91,7 +135,6 @@ function OutputNodeComponent({ data }: NodeProps) {
                 poster={scene.startFrameUrl ?? scene.generatedStartFrameUrl}
               />
             ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
               <img src={previewUrl} alt={scene.title} className="w-full h-full object-cover bg-muted/30" />
             )
           ) : isFailed ? (

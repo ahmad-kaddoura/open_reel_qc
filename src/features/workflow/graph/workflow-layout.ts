@@ -1,6 +1,7 @@
 import type { Scene, SceneStatus } from '@/core/types';
 
 export const outputNodeId = (sceneId: string) => `output-${sceneId}`;
+export const finalOutputNodeId = 'output-final';
 
 const ACTIVE_OUTPUT: SceneStatus[] = ['queued', 'generating', 'regenerating', 'completed', 'failed'];
 
@@ -102,6 +103,15 @@ export function computeAutoLayout(scenes: Scene[]): NodePositions {
 
     x += groupW + LAYOUT.GROUP_GAP;
   });
+
+  if (scenes.length > 0) {
+    const lastScene = scenes[scenes.length - 1];
+    const lastScenePos = positions[lastScene.id] ?? { x: 480, y: baseY + LAYOUT.INPUT_STACK_GAP };
+    positions[finalOutputNodeId] = {
+      x: lastScenePos.x + LAYOUT.SCENE_WIDTH + LAYOUT.COL_GAP + LAYOUT.OUTPUT_WIDTH + LAYOUT.GROUP_GAP,
+      y: baseY + LAYOUT.INPUT_STACK_GAP,
+    };
+  }
 
   return positions;
 }

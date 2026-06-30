@@ -321,6 +321,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         );
 
         const versionId = nanoid();
+        const project = useProjectStore.getState().getCurrentProject();
         set((s) => {
           if (!s.sceneMap[id]) return;
           const sc = s.sceneMap[id];
@@ -341,6 +342,25 @@ export const useWorkflowStore = create<WorkflowState>()(
           });
         });
         persistStoryboard(get);
+        if (project) {
+          await useProjectStore.getState().updateCurrentProject({
+            usageEvents: [
+              ...(project.usageEvents ?? []),
+              {
+                id: `usage-video-${id}-${Date.now()}`,
+                projectId: project.id,
+                sceneId: id,
+                model: useSettingsStore.getState().settings.generationModels.videoModel,
+                generationType: 'video',
+                action: `Generated scene video: ${scene.title}`,
+                assetType: 'final_video',
+                credits: Math.max(1, Math.ceil(scene.duration / 5)),
+                status: 'completed',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          });
+        }
       } catch {
         set((s) => {
           if (s.sceneMap[id]) {

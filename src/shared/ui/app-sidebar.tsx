@@ -11,13 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
-import { Plus, Search, Film, Settings, Palette, FolderOpen, Trash2, MoreHorizontal, Clapperboard, Pencil } from 'lucide-react';
+import { Plus, Search, Film, Settings, Palette, FolderOpen, Trash2, MoreHorizontal, Clapperboard, Pencil, BarChart3 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { PROJECT_PHASES } from './phase-config';
 import { formatDistanceToNow } from 'date-fns';
 
-type AppView = 'project' | 'settings' | 'brandkit' | 'assets';
+type AppView = 'project' | 'settings' | 'brandkit' | 'assets' | 'usage';
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -26,8 +26,8 @@ interface AppSidebarProps {
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  chat: 'Plan', brief: 'Brief', storyboard: 'Storyboard',
-  workflow: 'Workflow', generation: 'Generating', timeline: 'Timeline', export: 'Export',
+  chat: 'Plan', brief: 'Plan', storyboard: 'Plan',
+  workflow: 'Workflow', generation: 'Timeline', timeline: 'Timeline', export: 'Timeline',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -234,6 +234,7 @@ export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProp
         {[
           { id: 'brandkit' as AppView, icon: Palette, label: 'Brand Kits' },
           { id: 'assets' as AppView, icon: FolderOpen, label: 'Assets' },
+          { id: 'usage' as AppView, icon: BarChart3, label: 'Usage' },
           { id: 'settings' as AppView, icon: Settings, label: 'Settings' },
         ].map((item) => (
           <Tooltip key={item.id}>

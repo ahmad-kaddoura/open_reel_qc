@@ -15,6 +15,8 @@ interface VideoForgeDB extends DBSchema {
       videoBrief?: unknown;
       storyboard?: unknown;
       workflowGraph?: unknown;
+      creativePlan?: unknown;
+      usageEvents?: unknown[];
       settings: unknown;
       versions: unknown[];
     };

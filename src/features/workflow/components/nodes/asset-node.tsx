@@ -26,10 +26,11 @@ function AssetNodeComponent({ data }: NodeProps) {
       type: 'reference',
       url: asset.generatedImageUrl,
       thumbnailUrl: asset.generatedImageUrl,
-      mimeType: 'image/svg+xml',
+      mimeType: 'image/png',
       size: asset.generatedImageUrl.length,
       createdAt: new Date().toISOString(),
       metadata: {
+        consistencyReference: true,
         reusableAssetId: asset.id,
         assetType: asset.type,
         prompt: asset.referenceImagePrompt,

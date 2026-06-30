@@ -9,16 +9,20 @@ import { useSettingsStore } from '@/features/settings/store';
 import { AppSidebar } from '@/shared/ui/app-sidebar';
 import { PhaseStepper } from '@/shared/ui/phase-stepper';
 import { WelcomeView } from '@/shared/ui/welcome-view';
-import { BriefView } from '@/features/brief/brief-view';
-import { StoryboardView } from '@/features/storyboard/storyboard-view';
 import { TimelineView } from '@/features/timeline/timeline-view';
 import { SettingsView } from '@/features/settings/settings-view';
 import { BrandKitView } from '@/features/brand-kit/brand-kit-view';
 import { AssetLibraryView } from '@/features/assets/asset-library-view';
-import { ExportView } from '@/features/export/export-view';
+import { UsageView } from '@/features/usage/usage-view';
 import type { ProjectPhase } from '@/core/types';
 
-type AppView = 'project' | 'settings' | 'brandkit' | 'assets';
+type AppView = 'project' | 'settings' | 'brandkit' | 'assets' | 'usage';
+
+function normalizePhase(phase: ProjectPhase): ProjectPhase {
+  if (phase === 'brief' || phase === 'storyboard') return 'chat';
+  if (phase === 'generation' || phase === 'export') return 'timeline';
+  return phase;
+}
 
 export default function Home() {
   const { currentProjectId, loadProjects, getCurrentProject } = useProjectStore();
@@ -57,23 +61,23 @@ export default function Home() {
     if (activeView === 'assets') {
       return <AssetLibraryView />;
     }
+    if (activeView === 'usage') {
+      return <UsageView />;
+    }
 
     if (!currentProject) {
       return <WelcomeView />;
     }
 
-    const phase = currentProject.currentPhase;
+    const phase = normalizePhase(currentProject.currentPhase);
 
     return (
       <div className="flex flex-col h-full">
         <PhaseStepper currentPhase={phase} onPhaseChange={(p) => useProjectStore.getState().setPhase(p)} />
         <div className="flex-1 overflow-hidden">
           {phase === 'chat' && <ChatView />}
-          {phase === 'brief' && <BriefView />}
-          {phase === 'storyboard' && <StoryboardView />}
-          {(phase === 'workflow' || phase === 'generation') && <WorkflowView />}
-          {(phase === 'timeline') && <TimelineView />}
-          {phase === 'export' && <ExportView />}
+          {phase === 'workflow' && <WorkflowView />}
+          {phase === 'timeline' && <TimelineView />}
         </div>
       </div>
     );

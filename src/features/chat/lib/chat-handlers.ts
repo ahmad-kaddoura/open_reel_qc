@@ -1,4 +1,4 @@
-import type { CreativeWorkflowPlan, Project, ReusableAssetPlan, Scene, VideoBrief } from '@/core/types';
+import type { ConsistencyReference, CreativeWorkflowPlan, Project, ReusableAssetPlan, Scene, VideoBrief, VideoPlanningMode } from '@/core/types';
 import { buildVideoBriefPatch } from './video-output-utils';
 
 export type ChatIntent = 'planning' | 'brainstorm' | 'create_brief' | 'generate_storyboard' | 'hooks' | 'review';
@@ -123,44 +123,115 @@ export function buildStoryboardScenes(
   });
 }
 
-function inferAssetNeeds(concept: string): ReusableAssetPlan[] {
+function inferVideoMode(concept: string, referenceImageUrls: string[] = []): VideoPlanningMode {
+  const lower = concept.toLowerCase();
+  const explicitHuman = /influencer|creator|person|people|human|woman|female|man|male|model|actor|face|host|spokesperson|ugc/.test(lower);
+  const productSignal = /product|packaging|bottle|jar|device|shoe|watch|cosmetic|lipstick|foundation|serum|cream|brand|commercial|hero shot|product shot/.test(lower);
+  const influencerSignal = explicitHuman && /influencer|creator|ugc|host|spokesperson|tutorial|try on|try-on|makeup on|putting makeup|applying|reviewer/.test(lower);
+  if (productSignal && influencerSignal) return 'hybrid';
+  if (influencerSignal) return 'influencer';
+  if (productSignal || referenceImageUrls.length > 0) return 'product';
+  return explicitHuman ? 'influencer' : 'general';
+}
+
+function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImageUrls: string[]): ReusableAssetPlan[] {
   const lower = concept.toLowerCase();
   const assets: ReusableAssetPlan[] = [];
-  const needsInfluencer = /influencer|creator|woman|female|girl|model|person|face|makeup|beauty/.test(lower);
-  const needsProduct = /product|make\s*up|makeup|cosmetic|lipstick|foundation|serum|cream|brand/.test(lower);
+  const needsInfluencer = mode === 'influencer' || mode === 'hybrid';
+  const needsProduct = mode === 'product' || mode === 'hybrid' || /product|make\s*up|makeup|cosmetic|lipstick|foundation|serum|cream|brand/.test(lower) || referenceImageUrls.length > 0;
 
   if (needsInfluencer) {
     assets.push({
       id: 'asset-influencer-character',
       type: 'influencer',
-      name: 'Influencer Character Asset',
-      description: 'Consistent female beauty creator used as the hero subject across every scene.',
+      name: 'Influencer Identity',
+      description: 'Critical reusable influencer identity for every creator scene.',
       generationStatus: 'pending',
-      consistencyNotes: 'Keep the same face shape, skin tone, hair length, facial features, and approachable creator energy in all frames.',
-      styleNotes: 'Clean beauty lighting, polished but realistic makeup, modern neutral outfit, premium social-video framing.',
-      personality: 'Confident, warm, tutorial-friendly, aspirational without feeling staged.',
-      referenceImagePrompt: `Photorealistic reference portrait of a consistent female beauty influencer for ${concept}, clean studio bathroom or vanity lighting, natural skin texture, soft glam makeup, modern neutral outfit, direct-to-camera creator look, high detail`,
-      negativePrompt: 'different face, inconsistent hair, distorted hands, extra fingers, heavy filters, plastic skin, unreadable text, random logos',
-      usageNotes: 'Generate this identity first. Reuse it in every start frame, end frame, and motion prompt that includes the creator.',
+      consistencyNotes: 'Keep the same face, facial proportions, hairstyle, hair color, outfit, body style, skin tone, and overall identity across all related scenes.',
+      styleNotes: 'Clean creator lighting, natural skin texture, stable wardrobe, premium social-video framing.',
+      personality: 'Confident, warm, tutorial-friendly, credible, and consistent.',
+      referenceImagePrompt: `Photorealistic identity reference of the same influencer for ${concept}, clear face, hairstyle, outfit, body style, natural skin texture, clean creator environment, direct-to-camera look, high detail`,
+      negativePrompt: 'different face, different hair, outfit changes, body shape changes, distorted hands, extra fingers, heavy filters, plastic skin, unreadable text, random logos',
+      usageNotes: 'Generate and lock this identity before frames. Reuse it in every start frame, end frame, and motion prompt involving the influencer.',
       saveTargets: ['brand_identity', 'project_assets'],
+      criticality: 'critical',
+      reusePolicy: 'always',
     });
   }
 
   if (needsProduct) {
     assets.push({
-      id: 'asset-makeup-product',
+      id: 'asset-product-reference',
       type: 'product',
-      name: 'Makeup Product Asset',
-      description: 'Reusable hero cosmetic product or compact brand item for application and final product shot scenes.',
+      name: 'Product Reference',
+      description: 'Critical reusable product reference for packaging, material, scale, label placement, and brand continuity.',
       generationStatus: 'pending',
-      consistencyNotes: 'Keep packaging shape, cap color, label placement, and product color consistent.',
-      styleNotes: 'Minimal premium beauty packaging with clean readable silhouette; avoid inventing real brand logos.',
-      referenceImagePrompt: `Premium makeup product reference for ${concept}, elegant cosmetic packaging, clean label area, soft reflective surface, beauty campaign lighting, high detail`,
-      negativePrompt: 'real trademarked logos, misspelled text, warped packaging, duplicated caps, messy background',
-      usageNotes: 'Use in application, reveal, and product hero/CTA scenes. Save to assets if this becomes a recurring product.',
+      consistencyNotes: 'Keep product shape, dimensions, material, color, label placement, cap or closure details, and product scale consistent across every product scene.',
+      styleNotes: 'Premium product photography with clean readable silhouette; avoid inventing real brand logos.',
+      referenceImagePrompt: referenceImageUrls.length
+        ? `Create a clean reusable product reference based on the user's attached product image(s) for ${concept}. Preserve product shape, color, label placement, material, scale, distinctive packaging, and brand style. Isolated premium product photography, high detail`
+        : `Premium product reference for ${concept}, elegant packaging or product form, clean label area, accurate scale, soft reflective surface, campaign lighting, high detail`,
+      negativePrompt: 'people, faces, hands unless explicitly requested, real trademarked logos, misspelled text, warped packaging, duplicated caps, messy background',
+      usageNotes: 'Use as the main visual reference for product, feature, environment, and CTA scenes.',
       saveTargets: ['project_assets', 'brand_identity'],
+      criticality: 'critical',
+      reusePolicy: 'always',
     });
   }
+
+  if (mode === 'product' || mode === 'hybrid') {
+    assets.push({
+      id: 'asset-product-environment',
+      type: 'environment',
+      name: 'Product Environment',
+      description: 'Reusable set, lighting, props, surface, and composition language for product scenes.',
+      generationStatus: 'pending',
+      consistencyNotes: 'Keep surface material, prop family, lighting direction, color palette, background, and premium product scale consistent across related scenes.',
+      styleNotes: 'Commercial product set design with controlled reflections, disciplined negative space, and brand-aligned props.',
+      referenceImagePrompt: `Photorealistic product set environment for ${concept}, no people, premium surface, brand-aligned props, controlled reflections, consistent lighting direction, editorial commercial composition, high detail`,
+      negativePrompt: 'people, hands, faces, random logos, cluttered set, inconsistent lighting, distorted product scale',
+      usageNotes: 'Reuse for product-only scenes unless the user asks for a new location.',
+      saveTargets: ['brand_identity', 'project_assets'],
+      criticality: 'critical',
+      reusePolicy: 'when_relevant',
+    });
+  }
+
+  if (mode === 'influencer' || mode === 'hybrid') {
+    assets.push({
+      id: 'asset-influencer-background',
+      type: 'background',
+      name: 'Influencer Background',
+      description: 'Reusable location, lighting, and environment reference for related influencer scenes.',
+      generationStatus: 'pending',
+      consistencyNotes: 'Keep room geometry, vanity or set dressing, lighting direction, color palette, and camera height consistent when scenes are visually related.',
+      styleNotes: 'Natural creator space with clean production polish and enough depth for scene variation.',
+      referenceImagePrompt: `Photorealistic influencer video background reference for ${concept}, clean creator environment, consistent vanity or studio lighting, cohesive props, no new character, high detail`,
+      negativePrompt: 'extra people, inconsistent room layout, random logos, messy clutter, unreadable text',
+      usageNotes: 'Reuse for related scenes. Ask before switching to a new location.',
+      saveTargets: ['brand_identity', 'project_assets'],
+      criticality: 'supporting',
+      reusePolicy: 'when_relevant',
+    });
+  }
+
+  assets.push({
+    id: 'asset-visual-style',
+    type: 'style_reference',
+    name: 'Visual Direction',
+    description: 'Reusable style, lighting, palette, lens, and composition guide for the whole project.',
+    generationStatus: 'pending',
+    consistencyNotes: mode === 'product'
+      ? 'Protect product color, material, package proportions, brand palette, lighting direction, and composition grammar.'
+      : 'Protect identity, outfit, background continuity, lighting direction, color grade, and camera language.',
+    styleNotes: 'Compact production reference for consistency across images, frames, and video generation.',
+    referenceImagePrompt: `${mode === 'product' ? 'No people. Product-first' : 'Creator-led'} visual direction board for ${concept}, cohesive lighting, palette, lens choice, composition examples, premium AI video production style`,
+    negativePrompt: 'random logos, inconsistent style, chaotic collage, unreadable typography',
+    usageNotes: 'Attach as a consistency reference to every scene prompt and future regeneration.',
+    saveTargets: ['brand_identity', 'project_assets'],
+    criticality: 'critical',
+    reusePolicy: 'always',
+  });
 
   return assets;
 }
@@ -175,80 +246,143 @@ function scene(
   cameraMovement: Scene['cameraMovement'],
   action: string,
   assetsUsed: string[],
+  mode: VideoPlanningMode,
 ): Scene {
   const endTime = startTime + duration;
-  const startFramePrompt = `${title} start frame for ${concept}: ${goal}. Compose the opening image with clear subject placement, consistent reusable assets, and beauty-commercial detail.`;
-  const endFramePrompt = `${title} end frame for ${concept}: show the completed beat after the action, preserving the same character, product, lighting, and environment.`;
+  const productOnly = mode === 'product';
+  const startFramePrompt = productOnly
+    ? `${title} start frame for ${concept}: ${goal}. Product-first composition with no people, preserving exact product shape, packaging, color, brand style, props, lighting, surface, and environment.`
+    : `${title} start frame for ${concept}: ${goal}. Keep the same influencer face, hairstyle, outfit, body style, lighting, environment, and reusable assets.`;
+  const endFramePrompt = productOnly
+    ? `${title} end frame for ${concept}: show the completed product beat after the action, preserving the same product, props, surface, lighting, camera angle family, and brand style. No people unless explicitly requested.`
+    : `${title} end frame for ${concept}: show the completed beat after the action, preserving the same influencer identity, face, hairstyle, outfit, body style, lighting, environment, and related assets.`;
 
   return {
     id: `scene-${index}`,
     order: index - 1,
     title,
     sceneGoal: goal,
-    prompt: `${goal}. ${action}. Maintain visual continuity with approved reusable assets.`,
+    prompt: `${goal}. ${action}. Maintain continuity with approved reusable consistency references.`,
     startTime,
     endTime,
     duration,
     cameraMovement,
-    mood: 'Polished, intimate, creator-led',
-    characters: assetsUsed.filter((id) => id.includes('influencer')),
-    props: assetsUsed.filter((id) => id.includes('product')),
-    productPlacement: assetsUsed.some((id) => id.includes('product')) ? 'Product is visible only when narratively useful; final scene gives it the clean hero moment.' : undefined,
+    mood: productOnly ? 'Premium, precise, product-led' : 'Polished, intimate, creator-led',
+    characters: productOnly ? [] : assetsUsed.filter((id) => id.includes('influencer')),
+    props: assetsUsed.filter((id) => id.includes('product') || id.includes('environment')),
+    productPlacement: assetsUsed.some((id) => id.includes('product')) ? 'Product remains visually consistent with stable scale, material, packaging, and placement.' : undefined,
     transition: index === 1 ? 'fade' : 'cut',
     textOverlays: [],
     referenceImageUrls: [],
-    stylePreset: 'ugc_influencer',
+    stylePreset: productOnly ? 'realistic_product' : 'ugc_influencer',
     status: 'idle',
     versions: [],
     aspectRatio: '9:16',
     sceneDescription: goal,
     actionDescription: action,
-    visualStyle: 'Realistic UGC beauty tutorial with premium commercial polish',
-    lighting: 'Soft frontal vanity light with gentle highlights and natural skin texture',
-    details: 'Consistent face, outfit, makeup progression, product packaging, and tidy vanity environment',
-    avoid: 'warped hands, inconsistent face, random logos, unreadable labels, flickering makeup continuity',
+    visualStyle: productOnly ? 'Realistic product commercial with controlled studio polish' : 'Realistic creator video with premium commercial polish',
+    lighting: productOnly ? 'Controlled directional product light with soft reflections and consistent shadow direction' : 'Soft frontal creator light with gentle highlights and natural skin texture',
+    details: productOnly
+      ? 'Consistent product geometry, packaging, brand palette, surface, props, camera height, and background'
+      : 'Consistent face, hairstyle, outfit, body style, background, lighting, product packaging, and room continuity',
+    avoid: productOnly
+      ? 'people, faces, hands, human models, warped packaging, random logos, unreadable labels, inconsistent product scale'
+      : 'warped hands, inconsistent face, hairstyle changes, outfit changes, random logos, unreadable labels, flickering background continuity',
     startFramePrompt,
     endFramePrompt,
     frameGenerationStatus: 'pending',
-    motionPrompt: `Animate ${action.toLowerCase()} with controlled creator-style movement, stable facial identity, natural hand motion, and no sudden camera jumps.`,
-    negativePrompt: 'distorted hands, face changes, melted packaging, extra fingers, jump cuts, duplicated products, text artifacts',
-    narration: index === 1
-      ? 'Today I am testing a soft glam look that feels effortless on camera.'
-      : index === 4
-        ? 'Save this look for your next beauty routine.'
-        : undefined,
+    motionPrompt: productOnly
+      ? `Animate ${action.toLowerCase()} with smooth product-focused camera movement, stable product geometry, consistent props, and no human elements unless explicitly requested.`
+      : `Animate ${action.toLowerCase()} with controlled creator-style movement, stable facial identity, same outfit and background, natural motion, and no sudden camera jumps.`,
+    negativePrompt: productOnly
+      ? 'people, faces, hands, model, human, distorted product, melted packaging, duplicated product, text artifacts, jump cuts'
+      : 'distorted hands, face changes, hairstyle changes, outfit changes, melted packaging, extra fingers, jump cuts, duplicated products, text artifacts',
+    narration: productOnly ? undefined : index === 1 ? 'Let me show you how this comes together.' : index === 4 ? 'Save this for later.' : undefined,
     assetsUsed,
   };
 }
 
-export function buildCreativeWorkflowPlan(concept: string, referenceImageUrls: string[] = []): CreativeWorkflowPlan {
-  const safeConcept = concept || 'a creator-led short video';
-  const assets = inferAssetNeeds(safeConcept);
-  const assetIds = assets.map((asset) => asset.id);
+function buildProductScenes(concept: string, assetIds: string[], referenceImageUrls: string[]): Scene[] {
+  const coreAssets = assetIds.filter((id) => !id.includes('influencer'));
+  return [
+    scene(1, 'Product Hero Establish', 'Open with a precise hero shot that makes the product instantly recognizable.', concept, 4, 0, 'slow_push_in', 'Camera pushes toward the product on the brand-aligned surface with props framing it cleanly.', coreAssets, 'product'),
+    scene(2, 'Feature / Texture Detail', 'Show the product material, texture, applicator, or key feature without adding human subjects.', concept, 6, 4, 'close_up', 'Macro movement reveals the product detail, finish, packaging edge, or functional benefit.', coreAssets, 'product'),
+    scene(3, 'Environment / Use Case', 'Place the same product in a relevant environment while preserving product and brand continuity.', concept, 6, 10, 'orbit', 'Camera orbits gently around the product with related props and consistent lighting.', coreAssets, 'product'),
+    scene(4, 'Final Brand CTA', 'End with a clean product packshot and final branded composition.', concept, 4, 16, 'static', 'Product holds center frame with controlled negative space for a final CTA or tagline.', coreAssets, 'product'),
+  ].map((sc) => ({ ...sc, referenceImageUrls }));
+}
+
+function buildInfluencerScenes(concept: string, assetIds: string[], referenceImageUrls: string[], mode: VideoPlanningMode): Scene[] {
   const productIds = assetIds.filter((id) => id.includes('product'));
-  const influencerIds = assetIds.filter((id) => id.includes('influencer'));
+  const influencerIds = assetIds.filter((id) => id.includes('influencer') || id.includes('background') || id.includes('visual-style'));
   const allAssets = [...influencerIds, ...productIds];
 
-  const scenes = [
-    scene(1, 'Hook / Before Makeup Close-Up', 'Open with a clean close-up that establishes the influencer and the before state.', safeConcept, 4, 0, 'slow_push_in', 'The influencer looks into camera, shows natural skin, and teases the transformation.', influencerIds),
-    scene(2, 'Applying Product', 'Show the key makeup application beat with clear hand, product, and face continuity.', safeConcept, 7, 4, 'close_up', 'The influencer applies the product in a satisfying close-up with smooth hand movement.', allAssets),
-    scene(3, 'Beauty Reveal', 'Deliver the transformation payoff while keeping the same identity and makeup continuity.', safeConcept, 5, 11, 'dolly_in', 'The influencer turns toward the light to reveal the finished soft glam look.', influencerIds),
-    scene(4, 'Product Hero / CTA', 'End with a clean product and creator moment that can support a brand CTA.', safeConcept, 4, 16, 'static', 'The product sits foreground on the vanity while the influencer smiles behind it and gestures naturally.', allAssets),
+  return [
+    scene(1, 'Hook / Identity Establish', 'Open by locking the influencer identity and the starting context.', concept, 4, 0, 'slow_push_in', 'The influencer looks into camera in the established environment and sets up the story.', influencerIds, mode),
+    scene(2, 'Action / Proof Beat', 'Show the key creator action while preserving face, hair, outfit, body style, and background continuity.', concept, 7, 4, 'close_up', 'The influencer performs the main action in a satisfying close-up with smooth movement.', allAssets, mode),
+    scene(3, 'Reveal / Payoff', 'Deliver the visual payoff with the same influencer identity and related scene continuity.', concept, 5, 11, 'dolly_in', 'The influencer turns toward the light or camera to reveal the completed moment.', influencerIds, mode),
+    scene(4, 'CTA / Final Moment', 'End with a clean creator or product-supported CTA that still preserves the locked identity.', concept, 4, 16, 'static', 'The influencer holds the final pose or product moment with stable composition.', allAssets, mode),
   ].map((sc) => ({ ...sc, referenceImageUrls }));
+}
+
+function buildConsistencyReferences(planId: string, mode: VideoPlanningMode, assets: ReusableAssetPlan[], sceneIds: string[]): ConsistencyReference[] {
+  return assets.map((asset) => ({
+    id: `ref-${asset.id}`,
+    type: asset.type,
+    name: asset.name,
+    description: asset.description,
+    imageUrl: asset.generatedImageUrl,
+    prompt: asset.referenceImagePrompt,
+    negativePrompt: asset.negativePrompt,
+    consistencyNotes: asset.consistencyNotes,
+    criticalFor: asset.criticality === 'critical' ? [mode] : mode === 'hybrid' ? ['hybrid'] : [mode],
+    appliesToSceneIds: sceneIds,
+    reusePolicy: asset.reusePolicy ?? 'when_relevant',
+    savedToLibrary: false,
+    createdAt: new Date(Number(planId.replace('plan-', '')) || Date.now()).toISOString(),
+  }));
+}
+
+export function buildCreativeWorkflowPlan(concept: string, referenceImageUrls: string[] = []): CreativeWorkflowPlan {
+  const safeConcept = concept || 'a short video concept';
+  const videoMode = inferVideoMode(safeConcept, referenceImageUrls);
+  const assets = inferAssetNeeds(safeConcept, videoMode, referenceImageUrls);
+  const assetIds = assets.map((asset) => asset.id);
+  const scenes = videoMode === 'product'
+    ? buildProductScenes(safeConcept, assetIds, referenceImageUrls)
+    : buildInfluencerScenes(safeConcept, assetIds, referenceImageUrls, videoMode);
+  const planId = `plan-${Date.now()}`;
+  const consistencyReferences = buildConsistencyReferences(planId, videoMode, assets, scenes.map((sc) => sc.id));
+  const isProduct = videoMode === 'product';
 
   return {
-    id: `plan-${Date.now()}`,
+    id: planId,
     concept: safeConcept,
-    summary: `A creator-led beauty video built around ${safeConcept}. The workflow starts by locking reusable visual assets, then uses them across editable scene, frame, motion, script, and render nodes.`,
-    targetViewer: 'Beauty and social-commerce viewers who want a quick, credible transformation and product proof.',
-    toneAndStyle: 'Warm creator tutorial, realistic beauty lighting, polished short-form ad energy.',
-    storyStructure: ['Identity/reference asset first', 'Before-state hook', 'Application proof', 'Transformation reveal', 'Product hero and CTA'],
+    videoMode,
+    summary: isProduct
+      ? `A product-first video built around ${safeConcept}. The workflow locks product, environment, brand style, and composition references before generating scene frames.`
+      : `An influencer-led video built around ${safeConcept}. The workflow locks the influencer identity, outfit, background, style, and any product references before scene generation.`,
+    targetViewer: isProduct
+      ? 'Prospective buyers who need clear product proof, premium presentation, and visual trust.'
+      : 'Social-commerce viewers who respond to credible creator presence, continuity, and a clear payoff.',
+    toneAndStyle: isProduct
+      ? 'Premium product commercial, controlled lighting, clean props, consistent brand composition.'
+      : 'Warm creator-led video, stable identity continuity, realistic lighting, polished short-form energy.',
+    storyStructure: isProduct
+      ? ['Product reference first', 'Hero establish', 'Feature proof', 'Environment/use case', 'Final product CTA']
+      : ['Influencer identity first', 'Context hook', 'Action proof', 'Reveal/payoff', 'Creator/product CTA'],
     reusableAssets: assets,
+    consistencyReferences,
     scenes,
     consistencyRequirements: [
-      'Generate and approve reusable character/product references before scene generation.',
-      'Reuse the same face, hair, outfit, makeup progression, product packaging, and environment across frames.',
-      'Keep technical render choices in the output settings panel until the creative workflow is approved.',
+      isProduct
+        ? 'Do not generate human elements unless the user explicitly asks for them.'
+        : 'Treat influencer identity consistency as critical: same face, hairstyle, outfit, body style, and overall identity.',
+      isProduct
+        ? 'Treat product and brand consistency as critical: preserve packaging, material, color, scale, props, lighting, environment, and composition.'
+        : 'Reuse background, lighting, environment, and visual direction when scenes are in the same place or visually related.',
+      'Store generated assets, frames, backgrounds, style references, and brand identity as reusable consistency references for this project.',
+      'Automatically reuse critical references during relevant future generations; ask before replacing critical identity or product references.',
     ],
     renderSettingsDeferred: true,
   };
@@ -260,6 +394,7 @@ Do not ask for aspect ratio, duration, platform, fps, resolution, model, seed, o
 
 Respond with a concise creative plan that covers:
 - what the video is about
+- whether this is product-first, influencer-first, hybrid, or general
 - target viewer
 - tone and style
 - reusable character, product, brand, logo, or environment assets needed first
@@ -267,6 +402,13 @@ Respond with a concise creative plan that covers:
 - start/end frame direction
 - motion and camera direction
 - script or voiceover notes
-- consistency requirements
+- consistency requirements and what must remain locked
 
-If a reusable character or product is needed, explicitly say it should be generated before scenes. Keep the response actionable and invite the user to edit everything in Workflow.`;
+Rules:
+- For product videos, do not add human subjects unless the user explicitly asks for people, influencers, hands, models, or UGC.
+- For product videos, focus on product, environment, lighting, camera movement, brand style, props, composition, and product consistency.
+- For influencer videos, treat identity consistency as critical: same face, hairstyle, outfit, body style, and overall identity.
+- If scenes are visually related, keep background, lighting, environment, and visual continuity consistent.
+- If a reusable character, product, background, brand, or style reference is needed, explicitly say it should be generated before scenes.
+
+Keep the response actionable and invite the user to edit everything in Workflow.`;

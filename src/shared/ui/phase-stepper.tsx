@@ -1,24 +1,31 @@
 'use client';
 
+import type { ProjectPhase } from '@/core/types';
 import { PROJECT_PHASES } from './phase-config';
 
 const PHASES = PROJECT_PHASES;
 
 interface PhaseStepperProps {
-  currentPhase: string;
-  onPhaseChange: (phase: string) => void;
+  currentPhase: ProjectPhase;
+  onPhaseChange: (phase: ProjectPhase) => void;
 }
 
 export function PhaseStepper({ currentPhase, onPhaseChange }: PhaseStepperProps) {
-  const currentIndex = PHASES.findIndex(p => p.id === currentPhase);
+  const normalizedPhase: ProjectPhase =
+    currentPhase === 'brief' || currentPhase === 'storyboard'
+      ? 'chat'
+      : currentPhase === 'generation' || currentPhase === 'export'
+        ? 'timeline'
+        : currentPhase;
+  const currentIndex = PHASES.findIndex(p => p.id === normalizedPhase);
 
   return (
     <div className="border-b border-border bg-card/50 backdrop-blur-sm">
       <div className="flex items-center px-4 py-2 gap-1 overflow-x-auto">
         {PHASES.map((phase, idx) => {
-          const isActive = phase.id === currentPhase;
+          const isActive = phase.id === normalizedPhase;
           const isCompleted = idx < currentIndex;
-          const isClickable = idx <= currentIndex + 1;
+          const isClickable = true;
 
           return (
             <div key={phase.id} className="flex items-center">

@@ -10,16 +10,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { SpinnerIcon } from '@/components/ui/spinner-icon';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Send, FileText, Clapperboard, Wand2, Eye, SlidersHorizontal, Paperclip, X, ArrowRight } from 'lucide-react';
+import { Send, Boxes, Workflow, Wand2, Eye, SlidersHorizontal, Paperclip, X, ArrowRight } from 'lucide-react';
 import { renderGenerativeUI } from './generative-ui';
 import { VideoConfigPanel } from './video-config-panel';
-import { buildBriefFromProject } from '../lib/chat-handlers';
 import ReactMarkdown from 'react-markdown';
 import type { ChatAttachment, CreativeWorkflowPlan, GenerativeUIComponent, Scene, VideoBrief } from '@/core/types';
 
 const QUICK_ACTIONS = [
-  { label: 'Create Brief', icon: FileText, prompt: 'Create a structured video brief based on our conversation.' },
-  { label: 'Generate Storyboard', icon: Clapperboard, prompt: 'Generate a full storyboard with scene breakdowns based on our discussion.' },
+  { label: 'Plan Assets', icon: Boxes, prompt: 'Plan the reusable consistency references, assets, frames, and scenes for this video.' },
+  { label: 'Build Workflow', icon: Workflow, prompt: 'Create the editable workflow with scenes, assets, prompts, start frames, end frames, and consistency references.' },
   { label: 'Get Hooks', icon: Wand2, prompt: 'Generate some powerful hook ideas for the opening of my video.' },
   { label: 'AI Review', icon: Eye, prompt: 'Please review my current video plan and give me your director\'s feedback.' },
 ];
@@ -223,13 +222,6 @@ export function ChatView() {
     });
   };
 
-  const handleGoToBrief = async () => {
-    if (!currentProject) return;
-    const brief = buildBriefFromProject(currentProject);
-    await updateCurrentProject({ videoBrief: brief as VideoBrief });
-    setPhase('brief');
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -338,13 +330,13 @@ export function ChatView() {
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs gap-1"
-                onClick={() => handleSend(QUICK_ACTIONS[0].prompt)}
+                onClick={() => handleSend('Review the consistency references and improve the production plan before Workflow.')}
                 disabled={isStreaming}
               >
-                <FileText className="w-3 h-3" /> Create Brief
+                <Boxes className="w-3 h-3" /> Review References
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleGoToBrief}>
-                Brief tab <ArrowRight className="w-3 h-3" />
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setPhase('workflow')}>
+                Workflow <ArrowRight className="w-3 h-3" />
               </Button>
             </div>
           </div>

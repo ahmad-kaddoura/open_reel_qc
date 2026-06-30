@@ -2,11 +2,16 @@
 
 import { useWorkflowStore } from '@/features/workflow';
 import { useProjectStore } from '@/features/project/store';
+import { useSettingsStore } from '@/features/settings/store';
 import { StatusBadge } from '@/shared/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Play, Download, Plus, ArrowLeft, Clock, Film, Volume2, Subtitles, Type } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+import { Play, Download, Clock, Film, Volume2, Subtitles, Type, Workflow, MessageSquare, Scissors, Replace, GripHorizontal, Settings } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
 
 const TRACK_TYPES = [
   { id: 'video', label: 'Video', color: 'bg-blue-500/20 border-blue-500/40 text-blue-400', icon: Film },
@@ -16,14 +21,36 @@ const TRACK_TYPES = [
 ] as const;
 
 export function TimelineView() {
-  const { getScenes, getTotalDuration, addScene, setSceneStatus } = useWorkflowStore();
+  const { getScenes, getTotalDuration } = useWorkflowStore();
   const { setPhase } = useProjectStore();
+  const settings = useSettingsStore((s) => s.settings);
   const scenes = getScenes();
   const totalDuration = getTotalDuration();
   const maxDuration = Math.max(totalDuration, 30);
+  const [selectedPreset, setSelectedPreset] = useState(settings.exportPresets[0]?.id || 'tiktok');
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const preset = settings.exportPresets.find((p) => p.id === selectedPreset);
+  const completedScenes = scenes.filter((s) => s.status === 'completed').length;
+  const allCompleted = scenes.length > 0 && completedScenes === scenes.length;
+
+  const handleExport = () => {
+    setIsExporting(true);
+    setExportProgress(0);
+    const interval = setInterval(() => {
+      setExportProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsExporting(false);
+          return 100;
+        }
+        return Math.min(100, prev + 14);
+      });
+    }, 450);
+  };
 
   // Generate time markers
-  const timeMarkers = [];
+  const timeMarkers: number[] = [];
   for (let t = 0; t <= maxDuration; t += 5) {
     timeMarkers.push(t);
   }
@@ -33,19 +60,22 @@ export function TimelineView() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-border">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setPhase('workflow')} className="gap-1.5">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Workflow
-          </Button>
           <div>
             <h2 className="text-lg font-semibold">Timeline</h2>
             <p className="text-xs text-muted-foreground">{scenes.length} scenes · {totalDuration}s total</p>
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPhase('chat')} className="gap-1.5">
+            <MessageSquare className="w-3.5 h-3.5" /> Plan
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPhase('workflow')} className="gap-1.5">
+            <Workflow className="w-3.5 h-3.5" /> Workflow
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5">
             <Play className="w-3.5 h-3.5" /> Preview
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setPhase('export')}>
+          <Button size="sm" className="gap-1.5" onClick={handleExport} disabled={!allCompleted || isExporting}>
             <Download className="w-3.5 h-3.5" /> Export
           </Button>
         </div>
@@ -164,6 +194,17 @@ export function TimelineView() {
                     <span>{scene.startTime}s → {scene.endTime}s</span>
                     <Badge variant="outline" className="text-[9px] h-4">{scene.transition?.replace(/_/g,' ')}</Badge>
                   </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
+                      <Scissors className="w-3 h-3" /> Trim
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
+                      <GripHorizontal className="w-3 h-3" /> Move
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
+                      <Replace className="w-3 h-3" /> Replace
+                    </Button>
+                  </div>
                   {scene.narration && (
                     <p className="text-[10px] text-muted-foreground italic line-clamp-1">🎤 {scene.narration}</p>
                   )}
@@ -171,8 +212,74 @@ export function TimelineView() {
               ))}
             </div>
           </div>
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2"><Settings className="w-4 h-4" /> Export Options</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Preset</label>
+                  <Select value={selectedPreset} onValueChange={setSelectedPreset}>
+                    <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {settings.exportPresets.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {preset && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 rounded-lg border border-border bg-muted/20 p-3">
+                    <ExportField label="Resolution" value={preset.resolution} />
+                    <ExportField label="Aspect Ratio" value={preset.aspectRatio} />
+                    <ExportField label="Format" value={preset.format.toUpperCase()} />
+                    <ExportField label="Quality" value={preset.quality} />
+                    <ExportField label="FPS" value={`${preset.fps}`} />
+                    <ExportField label="Max Duration" value={`${preset.maxDuration}s`} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Final Render</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Scenes ready</span>
+                  <span>{completedScenes}/{scenes.length}</span>
+                </div>
+                <Progress value={scenes.length ? (completedScenes / scenes.length) * 100 : 0} className="h-1.5" />
+                {isExporting && (
+                  <>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Export progress</span>
+                      <span>{Math.round(exportProgress)}%</span>
+                    </div>
+                    <Progress value={exportProgress} className="h-1.5" />
+                  </>
+                )}
+                <Button className="w-full gap-2" onClick={handleExport} disabled={!allCompleted || isExporting}>
+                  <Download className="w-4 h-4" />
+                  {allCompleted ? 'Export Final Video' : 'Complete connected scenes first'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+function ExportField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium capitalize">{value}</div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   scriptNodeId,
   framesNodeId,
   outputNodeId,
+  finalOutputNodeId,
   shouldShowOutputNode,
   resolvePosition,
   computeAutoLayout,
@@ -21,6 +22,7 @@ export {
   scriptNodeId,
   framesNodeId,
   outputNodeId,
+  finalOutputNodeId,
 };
 
 // SVG markers and edge labels can't use CSS hsl() space syntax — use hex
@@ -232,6 +234,33 @@ export function buildWorkflowGraph(
       });
     }
   });
+
+  if (scenes.length > 0 && visible(finalOutputNodeId)) {
+    nodes.push({
+      id: finalOutputNodeId,
+      type: 'output',
+      position: pos(finalOutputNodeId),
+      data: { final: true, label: 'final output' },
+    });
+
+    scenes.forEach((scene) => {
+      const oid = outputNodeId(scene.id);
+      const source = visible(oid) && shouldShowOutputNode(scene) ? oid : scene.id;
+      if (!link(source, finalOutputNodeId)) return;
+      edges.push({
+        id: `e-final-${source}`,
+        source,
+        sourceHandle: source === oid ? 'output-out' : 'output-out',
+        target: finalOutputNodeId,
+        targetHandle: 'output-in',
+        type: 'smoothstep',
+        animated: scene.status === 'generating' || scene.status === 'regenerating' || scene.status === 'queued',
+        style: { stroke: C_OUTPUT_OK, strokeWidth: 2, opacity: scene.status === 'completed' ? 0.9 : 0.35 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: C_OUTPUT_OK },
+        ...edgeLabels('timeline', C_OUTPUT_OK, onEdge),
+      });
+    });
+  }
 
   return { nodes, edges };
 }

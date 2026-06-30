@@ -15,13 +15,20 @@ function framePrompt(scene: Scene, kind: 'start' | 'end', plan: CreativeWorkflow
     .filter((asset) => scene.assetsUsed?.includes(asset.id))
     .map((asset) => `${asset.name}: ${asset.description}. ${asset.consistencyNotes}`)
     .join('\n');
+  const referenceNotes = (plan.consistencyReferences ?? [])
+    .filter((ref) => ref.reusePolicy === 'always' || ref.appliesToSceneIds.includes(scene.id))
+    .map((ref) => `${ref.name} (${ref.type}, ${ref.reusePolicy}): ${ref.consistencyNotes}`)
+    .join('\n');
   const base = kind === 'start' ? scene.startFramePrompt : scene.endFramePrompt;
   return `${base}
 
 Style: ${plan.toneAndStyle}.
+Video type: ${plan.videoMode}.
 Scene continuity: ${plan.consistencyRequirements.join(' ')}
 Reusable assets to preserve:
 ${assetNotes || 'No reusable asset assigned.'}
+Consistency references:
+${referenceNotes || 'Use project visual direction and scene prompt only.'}
 Camera: ${scene.cameraMovement}. Lighting: ${scene.lighting}. Avoid: ${scene.negativePrompt || scene.avoid || ''}`;
 }
 
@@ -109,6 +116,19 @@ async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig)
       scene.frameGenerationError = err.message;
     }
   }
+
+  next.consistencyReferences = next.consistencyReferences.map((ref) => {
+    const asset = next.reusableAssets.find((item) => `ref-${item.id}` === ref.id || item.id === ref.id.replace(/^ref-/, ''));
+    return asset
+      ? {
+          ...ref,
+          imageUrl: asset.generatedImageUrl ?? ref.imageUrl,
+          prompt: asset.referenceImagePrompt,
+          negativePrompt: asset.negativePrompt,
+          consistencyNotes: asset.consistencyNotes,
+        }
+      : ref;
+  });
 
   return next;
 }

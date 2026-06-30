@@ -14,6 +14,7 @@ export interface Project {
   storyboard?: Storyboard;
   workflowGraph?: WorkflowGraph;
   creativePlan?: CreativeWorkflowPlan;
+  usageEvents?: UsageEvent[];
   settings: ProjectSettings;
   versions: ProjectVersion[];
   /** Reference images attached during chat brainstorming */
@@ -21,7 +22,7 @@ export interface Project {
 }
 
 export type ProjectStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'archived';
-export type ProjectPhase = 'chat' | 'brief' | 'storyboard' | 'workflow' | 'generation' | 'timeline' | 'export';
+export type ProjectPhase = 'chat' | 'workflow' | 'timeline' | 'brief' | 'storyboard' | 'generation' | 'export';
 
 export interface ProjectVersion {
   id: string;
@@ -229,7 +230,25 @@ export interface Character {
 }
 
 // ============= Creative Planning =============
-export type ReusableAssetType = 'character' | 'influencer' | 'brand_identity' | 'product' | 'logo' | 'environment';
+export type ReusableAssetType = 'character' | 'influencer' | 'brand_identity' | 'product' | 'logo' | 'environment' | 'background' | 'style_reference';
+
+export type VideoPlanningMode = 'product' | 'influencer' | 'hybrid' | 'general';
+
+export interface ConsistencyReference {
+  id: string;
+  type: ReusableAssetType;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  prompt?: string;
+  negativePrompt?: string;
+  consistencyNotes: string;
+  criticalFor: VideoPlanningMode[];
+  appliesToSceneIds: string[];
+  reusePolicy: 'always' | 'when_relevant' | 'ask';
+  savedToLibrary?: boolean;
+  createdAt: string;
+}
 
 export interface ReusableAssetPlan {
   id: string;
@@ -247,16 +266,20 @@ export interface ReusableAssetPlan {
   negativePrompt: string;
   usageNotes: string;
   saveTargets: ('brand_identity' | 'project_assets')[];
+  criticality?: 'critical' | 'supporting' | 'optional';
+  reusePolicy?: 'always' | 'when_relevant' | 'ask';
 }
 
 export interface CreativeWorkflowPlan {
   id: string;
   concept: string;
+  videoMode: VideoPlanningMode;
   summary: string;
   targetViewer: string;
   toneAndStyle: string;
   storyStructure: string[];
   reusableAssets: ReusableAssetPlan[];
+  consistencyReferences: ConsistencyReference[];
   scenes: Scene[];
   consistencyRequirements: string[];
   renderSettingsDeferred: boolean;
@@ -398,6 +421,25 @@ export interface GenerationJob {
   completedAt?: string;
   error?: string;
   outputUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ============= Usage =============
+export type UsageGenerationType = 'planning' | 'image' | 'frame' | 'video' | 'review' | 'export' | 'asset_save';
+
+export interface UsageEvent {
+  id: string;
+  projectId: string;
+  sceneId?: string;
+  assetId?: string;
+  model: string;
+  generationType: UsageGenerationType;
+  action: string;
+  assetType?: ReusableAssetType | Asset['type'] | 'timeline' | 'final_video';
+  tokens?: number;
+  credits?: number;
+  status: 'estimated' | 'completed' | 'failed';
+  createdAt: string;
   metadata?: Record<string, unknown>;
 }
 

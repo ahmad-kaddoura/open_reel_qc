@@ -23,6 +23,7 @@ import type {
   AspectRatio,
   CreativeWorkflowPlan,
   ReusableAssetPlan,
+  ConsistencyReference,
 } from '@/core/types';
 import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '../lib/video-output-utils';
 
@@ -57,10 +58,13 @@ export function renderGenerativeUI(
 }
 
 function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
-  const { updateCurrentProject, setPhase } = useProjectStore();
+  const { getCurrentProject, updateCurrentProject, setPhase } = useProjectStore();
   const { buildFromStoryboard } = useWorkflowStore();
+  const videoMode = plan.videoMode ?? 'general';
+  const consistencyReferences = plan.consistencyReferences ?? [];
 
   const openWorkflow = async () => {
+    const project = getCurrentProject();
     await updateCurrentProject({
       creativePlan: plan,
       storyboard: {
@@ -70,6 +74,20 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
         narrativeArc: plan.storyStructure.join(' → '),
         notes: plan.summary,
       },
+      usageEvents: [
+        ...(project?.usageEvents ?? []),
+        {
+          id: `usage-plan-${Date.now()}`,
+          projectId: project?.id ?? '',
+          model: 'planner',
+          generationType: 'planning',
+          action: `Created ${videoMode} plan with ${plan.scenes.length} scenes`,
+          tokens: 0,
+          credits: 0,
+          status: 'completed',
+          createdAt: new Date().toISOString(),
+        },
+      ],
     });
     buildFromStoryboard(plan.scenes);
     setPhase('workflow');
@@ -82,6 +100,7 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
           <span className="flex items-center gap-2">
             <LucideIcons.Workflow className="w-4 h-4 text-primary" />
             Creative Workflow Plan
+            <Badge variant="secondary" className="h-5 text-[10px] capitalize">{videoMode.replace(/_/g, ' ')}</Badge>
           </span>
           <Button size="sm" className="h-7 text-xs" onClick={openWorkflow}>
             Use Generated Assets in Workflow →
@@ -106,6 +125,17 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
           </div>
         )}
 
+        {consistencyReferences.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Consistency system</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {consistencyReferences.map((ref) => (
+                <ConsistencyReferenceCard key={ref.id} reference={ref} />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Generated start/end frames</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -123,6 +153,7 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
                     status={scene.frameGenerationStatus}
                     model={scene.frameGenerationModel}
                     error={scene.frameGenerationError}
+                    scene={scene}
                   />
                   <FramePreview
                     label="End"
@@ -130,6 +161,7 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
                     status={scene.frameGenerationStatus}
                     model={scene.frameGenerationModel}
                     error={scene.frameGenerationError}
+                    scene={scene}
                   />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -160,13 +192,39 @@ function FramePreview({
   status,
   model,
   error,
+  scene,
 }: {
   label: string;
   url?: string;
   status?: string;
   model?: string;
   error?: string;
+  scene: Scene;
 }) {
+  const { currentProjectId } = useProjectStore();
+
+  const saveFrame = async () => {
+    if (!currentProjectId || !url) return;
+    await storage.saveAsset({
+      id: `frame-${scene.id}-${label.toLowerCase()}-${Date.now()}`,
+      projectId: currentProjectId,
+      sceneId: scene.id,
+      name: `${scene.title} ${label} Frame`,
+      type: 'reference',
+      url,
+      thumbnailUrl: url,
+      mimeType: 'image/png',
+      size: url.length,
+      createdAt: new Date().toISOString(),
+      metadata: {
+        consistencyReference: true,
+        frameType: label.toLowerCase(),
+        prompt: label === 'Start' ? scene.startFramePrompt : scene.endFramePrompt,
+        model,
+      },
+    });
+  };
+
   return (
     <div className="overflow-hidden rounded-md border border-border/50 bg-background/30">
       <div className="relative aspect-[9/16]">
@@ -183,6 +241,45 @@ function FramePreview({
             {model}
           </span>
         )}
+        {url && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white" aria-label={`${label} frame actions`}>
+                <LucideIcons.MoreHorizontal className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={saveFrame}>Save to Asset Library</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConsistencyReferenceCard({ reference }: { reference: ConsistencyReference }) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold line-clamp-1">{reference.name}</div>
+          <div className="text-[10px] text-muted-foreground capitalize">{reference.type.replace(/_/g, ' ')}</div>
+        </div>
+        <Badge variant={reference.reusePolicy === 'always' ? 'default' : 'outline'} className="h-5 text-[10px]">
+          {reference.reusePolicy.replace(/_/g, ' ')}
+        </Badge>
+      </div>
+      {reference.imageUrl && (
+        <div className="mt-2 overflow-hidden rounded-md border border-border/50">
+          <img src={reference.imageUrl} alt={reference.name} className="aspect-video w-full object-cover" />
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-muted-foreground line-clamp-2">{reference.consistencyNotes}</p>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {reference.criticalFor.map((mode) => (
+          <Badge key={mode} variant="secondary" className="h-4 px-1.5 text-[9px] capitalize">{mode}</Badge>
+        ))}
       </div>
     </div>
   );
@@ -198,7 +295,7 @@ function PlanLine({ label, value }: { label: string; value: string }) {
 }
 
 function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
-  const { currentProjectId } = useProjectStore();
+  const { currentProjectId, getCurrentProject, updateCurrentProject } = useProjectStore();
 
   const saveToProjectAssets = async () => {
     if (!currentProjectId || !asset.generatedImageUrl) return;
@@ -209,10 +306,11 @@ function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
       type: 'reference',
       url: asset.generatedImageUrl,
       thumbnailUrl: asset.generatedImageUrl,
-      mimeType: 'image/svg+xml',
+      mimeType: 'image/png',
       size: asset.generatedImageUrl.length,
       createdAt: new Date().toISOString(),
       metadata: {
+        consistencyReference: true,
         reusableAssetId: asset.id,
         assetType: asset.type,
         prompt: asset.referenceImagePrompt,
@@ -220,6 +318,32 @@ function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
         consistencyNotes: asset.consistencyNotes,
       },
     });
+    const project = getCurrentProject();
+    if (project?.creativePlan) {
+      await updateCurrentProject({
+        creativePlan: {
+          ...project.creativePlan,
+          consistencyReferences: project.creativePlan.consistencyReferences.map((ref) =>
+            ref.id === `ref-${asset.id}` ? { ...ref, savedToLibrary: true, imageUrl: asset.generatedImageUrl } : ref,
+          ),
+        },
+        usageEvents: [
+          ...(project.usageEvents ?? []),
+          {
+            id: `usage-save-${asset.id}-${Date.now()}`,
+            projectId: currentProjectId,
+            assetId: asset.id,
+            model: asset.generationModel || 'asset-library',
+            generationType: 'asset_save',
+            action: `Saved ${asset.name} to project assets`,
+            assetType: asset.type,
+            credits: 0,
+            status: 'completed',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+    }
   };
 
   const saveToBrandIdentity = () => {
