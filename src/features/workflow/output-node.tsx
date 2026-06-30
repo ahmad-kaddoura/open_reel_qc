@@ -58,12 +58,16 @@ function OutputNodeComponent({ data }: NodeProps) {
       <Handle
         type="target"
         position={Position.Left}
-        id="result-in"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-background"
+        id="output-in"
+        className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background"
       />
 
       <div className={`w-[220px] rounded-xl border-2 ${borderClass} bg-card shadow-xl overflow-hidden`}>
-        <div className="h-[130px] bg-muted/20 relative overflow-hidden">
+        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
+          <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Output</span>
+        </div>
+
+        <div className="h-[130px] bg-muted/30 relative overflow-hidden">
           {isGenerating || isQueued ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 bg-blue-500/5">
               <Loader2 className="w-7 h-7 text-blue-400 animate-spin" />
@@ -79,19 +83,20 @@ function OutputNodeComponent({ data }: NodeProps) {
               {!isQueued && <span className="text-[9px] text-muted-foreground">{progress}%</span>}
             </div>
           ) : isComplete && previewUrl ? (
-            <>
-              {isVideo ? (
-                <video src={previewUrl} className="w-full h-full object-cover" muted playsInline loop autoPlay />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={previewUrl} alt={scene.title} className="w-full h-full object-cover" />
-              )}
-              {isVideo && (
-                <div className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
-                  <Film className="w-2.5 h-2.5" /> Video
-                </div>
-              )}
-            </>
+            isVideo ? (
+              <video
+                src={previewUrl}
+                className="w-full h-full object-cover bg-muted/30"
+                muted
+                playsInline
+                loop
+                autoPlay
+                poster={scene.startFrameUrl ?? scene.generatedStartFrameUrl}
+              />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={previewUrl} alt={scene.title} className="w-full h-full object-cover bg-muted/30" />
+            )
           ) : isFailed ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-red-400 bg-red-500/5">
               <AlertCircle className="w-6 h-6" />
@@ -99,13 +104,15 @@ function OutputNodeComponent({ data }: NodeProps) {
             </div>
           ) : null}
 
-          <div className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[9px] font-medium px-1.5 py-0.5 rounded">
-            Output
-          </div>
+          {isComplete && isVideo && (
+            <div className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none">
+              <Film className="w-2.5 h-2.5" /> Video
+            </div>
+          )}
         </div>
 
-        <div className="p-2 space-y-1.5">
-          <p className="text-[10px] font-medium line-clamp-1">{scene.title}</p>
+        <div className="p-2 border-t border-border/50 bg-card">
+          <p className="text-[10px] font-medium line-clamp-1 text-muted-foreground mb-1">{scene.title}</p>
 
           {(isComplete || isFailed) && (
             <div className="flex items-center justify-between">

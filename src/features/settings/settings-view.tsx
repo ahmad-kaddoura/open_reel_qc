@@ -34,7 +34,14 @@ const AGENT_INFO: { type: AgentType; icon: string; category: string }[] = [
 ];
 
 export function SettingsView() {
-  const { settings, getAgentConfig, updateAgentConfig, updateCostControls, setTheme, setScenePromptTemplate, resetScenePromptTemplate } = useSettingsStore();
+  const settings = useSettingsStore((s) => s.settings);
+  const getAgentConfig = useSettingsStore((s) => s.getAgentConfig);
+  const updateAgentConfig = useSettingsStore((s) => s.updateAgentConfig);
+  const updateCostControls = useSettingsStore((s) => s.updateCostControls);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const setScenePromptTemplate = useSettingsStore((s) => s.setScenePromptTemplate);
+  const resetScenePromptTemplate = useSettingsStore((s) => s.resetScenePromptTemplate);
+  const setEdgeLabelPlacement = useSettingsStore((s) => s.setEdgeLabelPlacement);
 
   return (
     <ScrollArea className="h-full">
@@ -355,6 +362,32 @@ export function SettingsView() {
                       >
                         <theme.icon className="w-4 h-4" />
                         <span className="text-sm">{theme.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium">Connection labels</Label>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">
+                    Show port names on the connection lines, or inside the scene node like n8n.
+                  </p>
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'in-node' as const, label: 'Inside nodes (n8n)' },
+                      { id: 'on-edge' as const, label: 'On connection lines' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setEdgeLabelPlacement(opt.id)}
+                        className={`flex-1 p-3 rounded-lg border text-sm transition-all ${
+                          (settings.edgeLabelPlacement ?? 'in-node') === opt.id
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border hover:border-primary/30'
+                        }`}
+                      >
+                        {opt.label}
                       </button>
                     ))}
                   </div>

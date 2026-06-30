@@ -12,7 +12,18 @@ import {
   computeAutoLayout,
   loadLayoutFromStorage,
   saveLayoutToStorage,
+  outputNodeId,
 } from './workflow-layout';
+import { nodeIdsForScene, sceneIdFromNodeId } from './workflow-node-utils';
+
+function persistLayout(get: () => WorkflowState) {
+  const projectId = get().layoutProjectId;
+  if (!projectId) return;
+  saveLayoutToStorage(projectId, {
+    positions: get().nodePositions,
+    hiddenNodes: Object.keys(get().hiddenNodeIds),
+  });
+}
 
 function persistStoryboard(get: () => WorkflowState) {
   const project = useProjectStore.getState().getCurrentProject();
@@ -30,11 +41,13 @@ interface WorkflowState {
   sceneMap: Record<string, Scene>;
   sceneOrder: string[];
   nodePositions: Record<string, { x: number; y: number }>;
+  hiddenNodeIds: Record<string, true>;
   layoutProjectId: string | null;
 
   // Scene CRUD
   addScene: (afterIndex?: number) => void;
   removeScene: (id: string) => void;
+  removeWorkflowNode: (nodeId: string) => void;
   updateScene: (id: string, updates: Partial<Scene>) => void;
   reorderScenes: (newOrder: string[]) => void;
   duplicateScene: (id: string) => void;
@@ -68,6 +81,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     sceneMap: {},
     sceneOrder: [],
     nodePositions: {},
+    hiddenNodeIds: {},
     layoutProjectId: null,
     isGeneratingAll: false,
 
@@ -103,6 +117,8 @@ export const useWorkflowStore = create<WorkflowState>()(
         lighting: '',
         details: '',
         avoid: '',
+        startFrameUrl: undefined,
+        endFrameUrl: undefined,
       };
 
       set((s) => {
@@ -149,7 +165,29 @@ export const useWorkflowStore = create<WorkflowState>()(
             s.sceneMap[sid].endTime = s.sceneMap[sid].startTime + s.sceneMap[sid].duration;
           }
         });
+        for (const nid of nodeIdsForScene(id)) {
+          delete s.nodePositions[nid];
+          delete s.hiddenNodeIds[nid];
+        }
       });
+      const projectId = get().layoutProjectId;
+      if (projectId) persistLayout(get);
+      persistStoryboard(get);
+    },
+
+    removeWorkflowNode: (nodeId) => {
+      const sceneId = sceneIdFromNodeId(nodeId, get().sceneOrder);
+
+      set((s) => {
+        s.hiddenNodeIds[nodeId] = true;
+        delete s.nodePositions[nodeId];
+      });
+
+      if (nodeId.startsWith('output-') && sceneId) {
+        get().clearSceneOutput(sceneId);
+      }
+
+      persistLayout(get);
     },
 
     updateScene: (id, updates) => {
@@ -241,6 +279,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           s.sceneMap[id].status = 'generating';
           s.sceneMap[id].generationProgress = 0;
           s.sceneMap[id].enhancedPrompt = builtPrompt;
+          delete s.hiddenNodeIds[outputNodeId(id)];
         }
       });
 
@@ -352,7 +391,10 @@ export const useWorkflowStore = create<WorkflowState>()(
       const saved = loadLayoutFromStorage(projectId);
       set((s) => {
         s.layoutProjectId = projectId;
-        s.nodePositions = saved ?? {};
+        s.nodePositions = saved?.positions ?? {};
+        s.hiddenNodeIds = Object.fromEntries(
+          (saved?.hiddenNodes ?? []).map((id) => [id, true as const]),
+        );
       });
     },
 
@@ -360,10 +402,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       set((s) => {
         s.nodePositions[nodeId] = position;
       });
-      const projectId = get().layoutProjectId;
-      if (projectId) {
-        saveLayoutToStorage(projectId, get().nodePositions);
-      }
+      persistLayout(get);
     },
 
     applyAutoLayout: () => {
@@ -372,10 +411,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       set((s) => {
         s.nodePositions = positions;
       });
-      const projectId = get().layoutProjectId;
-      if (projectId) {
-        saveLayoutToStorage(projectId, positions);
-      }
+      persistLayout(get);
     },
 
     getNodePositions: () => get().nodePositions,

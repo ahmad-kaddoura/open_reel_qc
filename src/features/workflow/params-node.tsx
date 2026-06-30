@@ -21,7 +21,7 @@ function ParamsNodeComponent({ data }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        id="params-out"
+        id="parameters-out"
         className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background"
       />
 
@@ -125,4 +125,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export const ParamsNode = memo(ParamsNodeComponent);
+export const ParametersNode = memo(ParamsNodeComponent);
+/** @deprecated use ParametersNode */
+export const ParamsNode = ParametersNode;

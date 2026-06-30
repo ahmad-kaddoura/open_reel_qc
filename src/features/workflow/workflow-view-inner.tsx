@@ -12,7 +12,7 @@ import {
   type Connection,
   type NodeTypes,
   type ReactFlowInstance,
-  type Node,
+  type Node as FlowNode,
   BackgroundVariant,
   Panel,
 } from '@xyflow/react';
@@ -25,9 +25,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Plus, Play, LayoutGrid, Loader2, Sparkles, Film, Camera, Eye, Zap, Wand2, AlignHorizontalSpaceAround } from 'lucide-react';
 import { SceneNode } from './scene-node';
 import { OutputNode } from './output-node';
-import { ParamsNode } from './params-node';
+import { ParametersNode } from './params-node';
 import { ScriptNode } from './script-node';
+import { FramesNode } from './frames-node';
 import { buildWorkflowGraph } from './workflow-graph';
+import { useWorkflowNodeContextMenu } from './workflow-context-menu';
+import { useSettingsStore } from '@/features/settings/store';
 
 const AI_ACTIONS = [
   { label: 'Improve Prompt', icon: Sparkles, prompt: 'improve' },
@@ -41,14 +44,16 @@ const AI_ACTIONS = [
 const nodeTypes: NodeTypes = {
   scene: SceneNode,
   output: OutputNode,
-  params: ParamsNode,
+  parameters: ParametersNode,
   script: ScriptNode,
+  frames: FramesNode,
 };
 
 export function WorkflowViewInner() {
   const sceneMap = useWorkflowStore((s) => s.sceneMap);
   const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
   const nodePositions = useWorkflowStore((s) => s.nodePositions);
+  const hiddenNodeIds = useWorkflowStore((s) => s.hiddenNodeIds);
   const addScene = useWorkflowStore((s) => s.addScene);
   const updateScene = useWorkflowStore((s) => s.updateScene);
   const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
@@ -57,10 +62,12 @@ export function WorkflowViewInner() {
   const setNodePosition = useWorkflowStore((s) => s.setNodePosition);
   const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
   const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
+  const edgeLabelPlacement = useSettingsStore((s) => s.settings.edgeLabelPlacement ?? 'in-node');
   const { setPhase, currentProjectId } = useProjectStore();
   const [, setSelectedNode] = useState<string | null>(null);
   const [outputViewSceneId, setOutputViewSceneId] = useState<string | null>(null);
   const rfRef = useRef<ReactFlowInstance | null>(null);
+  const { onNodeContextMenu, menuUi, confirmUi, backdrop } = useWorkflowNodeContextMenu();
 
   const scenes = useMemo(
     () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
@@ -78,14 +85,14 @@ export function WorkflowViewInner() {
 
   const graphKey = useMemo(
     () => scenes.map((s) =>
-      `${s.id}:${s.status}:${s.generatedVideoUrl ?? ''}:${s.title}:${s.duration}`,
+      `${s.id}:${s.status}:${s.startFrameUrl ?? ''}:${s.endFrameUrl ?? ''}:${s.generatedVideoUrl ?? ''}:${s.title}:${s.duration}`,
     ).join('|'),
     [scenes],
   );
 
   const { nodes: graphNodes, edges: graphEdges } = useMemo(
-    () => buildWorkflowGraph(scenes, nodePositions),
-    [graphKey, nodePositions, scenes],
+    () => buildWorkflowGraph(scenes, nodePositions, edgeLabelPlacement, hiddenNodeIds),
+    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
@@ -110,7 +117,7 @@ export function WorkflowViewInner() {
     return () => { delete (window as any).__sceneNodeUpdate; };
   }, [handleNodeDataChange]);
 
-  const onNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
+  const onNodeDragStop = useCallback((_: React.MouseEvent, node: FlowNode) => {
     setNodePosition(node.id, node.position);
   }, [setNodePosition]);
 
@@ -136,6 +143,7 @@ export function WorkflowViewInner() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={onNodeContextMenu}
           nodeTypes={nodeTypes}
           onInit={(inst) => { rfRef.current = inst; }}
           onNodeClick={(_, node) => setSelectedNode(node.id)}
@@ -153,8 +161,9 @@ export function WorkflowViewInner() {
             nodeStrokeColor="hsl(var(--primary))"
             nodeColor={(node) => {
               if (node.type === 'output') return 'hsl(142 71% 45%)';
-              if (node.type === 'params') return 'hsl(45 93% 47%)';
+              if (node.type === 'parameters') return 'hsl(45 93% 47%)';
               if (node.type === 'script') return 'hsl(270 60% 60%)';
+              if (node.type === 'frames') return 'hsl(173 58% 45%)';
               return 'hsl(var(--primary))';
             }}
             nodeBorderRadius={8}
@@ -214,6 +223,10 @@ export function WorkflowViewInner() {
             </Button>
           </Panel>
         </ReactFlow>
+
+        {backdrop}
+        {menuUi}
+        {confirmUi}
 
         {outputViewSceneId && viewScene && viewUrl && (
           <Dialog open={Boolean(outputViewSceneId)} onOpenChange={(o) => !o && setOutputViewSceneId(null)}>

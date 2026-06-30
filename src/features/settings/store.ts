@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, Scene } from '@/core/types';
 import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE } from '@/core/config';
 
@@ -26,6 +27,7 @@ interface SettingsState {
   setDefaultPlatform: (platform: AppSettings['defaultPlatform']) => void;
   setScenePromptTemplate: (template: string) => void;
   resetScenePromptTemplate: () => void;
+  setEdgeLabelPlacement: (placement: AppSettings['edgeLabelPlacement']) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -37,11 +39,12 @@ const defaultSettings: AppSettings = {
   defaultPlatform: 'tiktok',
   defaultFps: 30,
   scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
+  edgeLabelPlacement: 'in-node',
 };
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
+    immer((set, get) => ({
       settings: defaultSettings,
 
       getAgentConfig: (type) => {
@@ -114,10 +117,33 @@ export const useSettingsStore = create<SettingsState>()(
       resetScenePromptTemplate: () => {
         set((s) => { s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE; });
       },
-    }),
+
+      setEdgeLabelPlacement: (placement) => {
+        set((s) => { s.settings.edgeLabelPlacement = placement; });
+      },
+    })),
     {
       name: 'videoforge-settings',
       storage: createJSONStorage(() => localStorage),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<SettingsState> | undefined;
+        return {
+          ...current,
+          ...p,
+          settings: {
+            ...current.settings,
+            ...p?.settings,
+            agentConfigs: {
+              ...current.settings.agentConfigs,
+              ...p?.settings?.agentConfigs,
+            },
+            costControls: {
+              ...current.settings.costControls,
+              ...p?.settings?.costControls,
+            },
+          },
+        };
+      },
     }
   )
 );

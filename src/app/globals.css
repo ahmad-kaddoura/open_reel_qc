@@ -132,3 +132,11 @@
 .workflow-canvas .react-flow__node.selected {
   box-shadow: none !important;
 }
+
+.workflow-canvas .react-flow__edge-textbg {
+  fill: #1c1c1f !important;
+}
+
+.workflow-canvas .react-flow__edge-text {
+  fill: #a1a1aa !important;
+}

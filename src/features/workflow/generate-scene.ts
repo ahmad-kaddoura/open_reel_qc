@@ -38,7 +38,9 @@ export async function generateSceneAssets(
   }
 
   const startFrameUrl =
-    scene.referenceImageUrls?.[0] ?? placeholderFrameUrl(scene.title, scene.order);
+    scene.startFrameUrl ??
+    scene.referenceImageUrls?.[0] ??
+    placeholderFrameUrl(scene.title, scene.order);
   const videoUrl = SAMPLE_CLIPS[scene.order % SAMPLE_CLIPS.length];
 
   return { startFrameUrl, videoUrl };

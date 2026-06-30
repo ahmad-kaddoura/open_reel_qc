@@ -143,6 +143,8 @@ export interface Scene {
   lighting?: string;
   details?: string;
   avoid?: string;
+  startFrameUrl?: string;
+  endFrameUrl?: string;
 }
 
 export type SceneStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed' | 'cancelled' | 'regenerating';
@@ -292,6 +294,8 @@ export type AgentType =
   | 'video_assembler'
   | 'hook_generator';
 
+export type EdgeLabelPlacement = 'on-edge' | 'in-node';
+
 // ============= App Settings =============
 export interface AppSettings {
   agentConfigs: Record<AgentType, AgentConfig>;
@@ -302,6 +306,7 @@ export interface AppSettings {
   defaultPlatform: TargetPlatform;
   defaultFps: number;
   scenePromptTemplate: string;
+  edgeLabelPlacement: EdgeLabelPlacement;
 }
 
 export interface ExportPreset {

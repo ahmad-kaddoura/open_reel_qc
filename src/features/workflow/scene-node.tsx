@@ -10,13 +10,28 @@ import {
 import { MoreHorizontal, Play, RotateCcw, Trash2, Sparkles, ImageIcon, Loader2 } from 'lucide-react';
 import { AI_ACTIONS } from './workflow-view';
 import { useWorkflowStore } from './store';
+import { useSettingsStore } from '@/features/settings/store';
 import type { Scene } from '@/core/types';
+
+function PortLabel({ label, top, color, side }: { label: string; top: string; color: string; side: 'left' | 'right' }) {
+  return (
+    <span
+      className={`absolute text-[8px] font-medium pointer-events-none whitespace-nowrap ${
+        side === 'left' ? 'right-full mr-2' : 'left-full ml-2'
+      }`}
+      style={{ top, color }}
+    >
+      {label}
+    </span>
+  );
+}
 
 function SceneNodeComponent({ data, id }: NodeProps) {
   const storedScene = useWorkflowStore((s) => s.sceneMap[id]);
   const fallback = data as unknown as Scene;
   const scene = storedScene ?? fallback;
   const generateScene = useWorkflowStore((s) => s.generateScene);
+  const inNodeLabels = useSettingsStore((s) => (s.settings.edgeLabelPlacement ?? 'in-node') === 'in-node');
 
   const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
   const refPreview = scene.referenceImageUrls?.[0];
@@ -41,12 +56,27 @@ function SceneNodeComponent({ data, id }: NodeProps) {
 
   return (
     <div className="relative">
-      <Handle type="target" position={Position.Left} id="flow-in" className="!w-3 !h-3 !bg-primary !border-2 !border-background" style={{ top: '18%' }} />
-      <Handle type="target" position={Position.Left} id="params-in" className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background" style={{ top: '45%' }} />
-      <Handle type="target" position={Position.Left} id="script-in" className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" style={{ top: '72%' }} />
+      <Handle type="target" position={Position.Left} id="flow-in" className="!w-3 !h-3 !bg-primary !border-2 !border-background" style={{ top: '12%' }} />
+      <Handle type="target" position={Position.Left} id="parameters-in" className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background" style={{ top: '32%' }} />
+      <Handle type="target" position={Position.Left} id="script-in" className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" style={{ top: '52%' }} />
+      <Handle type="target" position={Position.Left} id="frames-in" className="!w-3 !h-3 !bg-teal-500 !border-2 !border-background" style={{ top: '72%' }} />
+
+      {inNodeLabels && (
+        <>
+          <PortLabel label="parameters" top="28%" color="hsl(45 93% 47%)" side="left" />
+          <PortLabel label="script" top="48%" color="hsl(270 60% 60%)" side="left" />
+          <PortLabel label="frames" top="68%" color="hsl(173 58% 45%)" side="left" />
+          <PortLabel label="output" top="84%" color="hsl(142 71% 45%)" side="right" />
+        </>
+      )}
 
       <div className={`w-[240px] rounded-xl border-2 ${statusColors[scene.status] || 'border-border'} bg-card shadow-xl overflow-hidden`}>
-        <div className="h-[90px] bg-muted/30 relative overflow-hidden">
+        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30 flex items-center justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-semibold text-foreground/80">Scene</span>
+          <StatusBadge status={scene.status} />
+        </div>
+
+        <div className="h-[80px] bg-muted/30 relative overflow-hidden">
           {refPreview ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -58,7 +88,6 @@ function SceneNodeComponent({ data, id }: NodeProps) {
               <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
             </div>
           )}
-          <div className="absolute top-1.5 right-1.5"><StatusBadge status={scene.status} /></div>
           <div className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">#{scene.order + 1}</div>
           {isGenerating && (
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-1.5">
@@ -89,9 +118,6 @@ function SceneNodeComponent({ data, id }: NodeProps) {
                 <DropdownMenuItem onClick={() => handleUpdate({ status: 'idle' })} className="gap-2">
                   <RotateCcw className="w-3.5 h-3.5" /> Reset
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 text-red-400 focus:text-red-400">
-                  <Trash2 className="w-3.5 h-3.5" /> Delete
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -110,8 +136,8 @@ function SceneNodeComponent({ data, id }: NodeProps) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} id="flow" className="!w-3 !h-3 !bg-primary !border-2 !border-background" style={{ top: '18%' }} />
-      <Handle type="source" position={Position.Right} id="generate" className="!w-3 !h-3 !bg-blue-500 !border-2 !border-background" style={{ top: '82%' }} />
+      <Handle type="source" position={Position.Right} id="flow-out" className="!w-3 !h-3 !bg-primary !border-2 !border-background" style={{ top: '12%' }} />
+      <Handle type="source" position={Position.Right} id="output-out" className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" style={{ top: '88%' }} />
     </div>
   );
 }

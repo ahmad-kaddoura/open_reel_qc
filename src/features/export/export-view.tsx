@@ -17,7 +17,7 @@ import { useState } from 'react';
 export function ExportView() {
   const { getCurrentProject, setPhase } = useProjectStore();
   const { getScenes, getTotalDuration } = useWorkflowStore();
-  const { settings } = useSettingsStore();
+  const settings = useSettingsStore((s) => s.settings);
   const project = getCurrentProject();
   const scenes = getScenes();
   const totalDuration = getTotalDuration();

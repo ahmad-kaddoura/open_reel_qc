@@ -9,53 +9,81 @@ export function shouldShowOutputNode(scene: Scene): boolean {
 }
 
 export const LAYOUT = {
-  PARAMS_WIDTH: 180,
+  PARAMETERS_WIDTH: 180,
   SCRIPT_WIDTH: 220,
+  FRAMES_WIDTH: 180,
   SCENE_WIDTH: 240,
   OUTPUT_WIDTH: 220,
   COL_GAP: 40,
   GROUP_GAP: 80,
+  INPUT_STACK_GAP: 200,
 } as const;
 
 export type NodePositions = Record<string, { x: number; y: number }>;
 
-export const paramsNodeId = (sceneId: string) => `params-${sceneId}`;
+export type WorkflowLayout = {
+  positions: NodePositions;
+  hiddenNodes?: string[];
+};
+
+function isLegacyPositions(value: unknown): value is NodePositions {
+  if (!value || typeof value !== 'object') return false;
+  const first = Object.values(value as Record<string, unknown>)[0];
+  return Boolean(first && typeof first === 'object' && 'x' in first && 'y' in first);
+}
+
+function normalizeLayout(raw: unknown): WorkflowLayout | null {
+  if (!raw) return null;
+  if (isLegacyPositions(raw)) return { positions: raw, hiddenNodes: [] };
+  const layout = raw as WorkflowLayout;
+  if (layout.positions) {
+    return { positions: layout.positions, hiddenNodes: layout.hiddenNodes ?? [] };
+  }
+  return null;
+}
+
+export const parametersNodeId = (sceneId: string) => `parameters-${sceneId}`;
 export const scriptNodeId = (sceneId: string) => `script-${sceneId}`;
+export const framesNodeId = (sceneId: string) => `frames-${sceneId}`;
+
+/** @deprecated use parametersNodeId */
+export const paramsNodeId = parametersNodeId;
 
 function layoutStorageKey(projectId: string) {
   return `videoforge-layout-${projectId}`;
 }
 
-export function loadLayoutFromStorage(projectId: string): NodePositions | null {
+export function loadLayoutFromStorage(projectId: string): WorkflowLayout | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(layoutStorageKey(projectId));
-    return raw ? (JSON.parse(raw) as NodePositions) : null;
+    return raw ? normalizeLayout(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
-export function saveLayoutToStorage(projectId: string, positions: NodePositions) {
+export function saveLayoutToStorage(projectId: string, layout: WorkflowLayout) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(layoutStorageKey(projectId), JSON.stringify(positions));
+  localStorage.setItem(layoutStorageKey(projectId), JSON.stringify(layout));
 }
 
-/** Default positions: Params + Script on left, Scene center, Output right. */
+/** Default positions: Parameters, Script, Frames on left → Scene → Output. */
 export function computeAutoLayout(scenes: Scene[]): NodePositions {
   const positions: NodePositions = {};
   let x = 80;
-  const baseY = 100;
+  const baseY = 80;
 
   scenes.forEach((scene, idx) => {
-    const y = baseY + (idx % 2) * 60;
+    const y = baseY + (idx % 2) * 40;
     const hasOutput = shouldShowOutputNode(scene);
 
-    positions[paramsNodeId(scene.id)] = { x, y };
-    positions[scriptNodeId(scene.id)] = { x, y: y + 290 };
+    positions[parametersNodeId(scene.id)] = { x, y };
+    positions[scriptNodeId(scene.id)] = { x, y: y + LAYOUT.INPUT_STACK_GAP };
+    positions[framesNodeId(scene.id)] = { x, y: y + LAYOUT.INPUT_STACK_GAP * 2 };
 
-    const sceneX = x + LAYOUT.PARAMS_WIDTH + LAYOUT.COL_GAP;
-    const sceneY = y + 100;
+    const sceneX = x + LAYOUT.PARAMETERS_WIDTH + LAYOUT.COL_GAP;
+    const sceneY = y + LAYOUT.INPUT_STACK_GAP;
     positions[scene.id] = { x: sceneX, y: sceneY };
 
     if (hasOutput) {
@@ -66,7 +94,7 @@ export function computeAutoLayout(scenes: Scene[]): NodePositions {
     }
 
     const groupW =
-      LAYOUT.PARAMS_WIDTH +
+      LAYOUT.PARAMETERS_WIDTH +
       LAYOUT.COL_GAP +
       LAYOUT.SCENE_WIDTH +
       LAYOUT.COL_GAP +
