@@ -24,7 +24,7 @@ export function WelcomeView() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl w-full text-center"
+        className="max-w-4xl w-full text-center"
       >
         {/* Logo */}
         <div className="flex justify-center mb-6">
@@ -50,10 +50,11 @@ export function WelcomeView() {
             <Zap className="w-3.5 h-3.5" />
             Quick Start Templates
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 auto-rows-fr">
             {VIDEO_TYPES.slice(0, 9).map((type, idx) => (
               <motion.div
                 key={type.id}
+                className="h-full"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}

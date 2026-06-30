@@ -15,17 +15,17 @@ export function VideoTypeCard({ icon, name, description, onClick }: VideoTypeCar
 
   return (
     <Card
-      className="cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
+      className="h-full cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
       onClick={onClick}
     >
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-            <IconComponent className="w-4.5 h-4.5 text-primary" />
+      <CardContent className="p-3.5 h-[84px]">
+        <div className="flex items-start gap-2.5 h-full">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+            <IconComponent className="w-4 h-4 text-primary" />
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium mb-0.5">{name}</div>
-            <div className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{description}</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium mb-0.5 leading-tight">{name}</div>
+            <div className="text-[11px] text-muted-foreground leading-snug line-clamp-2">{description}</div>
           </div>
         </div>
       </CardContent>

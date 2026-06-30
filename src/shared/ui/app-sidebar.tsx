@@ -207,7 +207,7 @@ export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProp
 
       {/* Bottom Nav */}
       <Separator />
-      <div className={`p-2 flex ${collapsed ? 'flex-col items-center' : 'flex-row items-center'} gap-1`}>
+      <div className={`p-2 flex ${collapsed ? 'flex-col items-center gap-1' : 'flex-col gap-0.5'}`}>
         {[
           { id: 'brandkit' as AppView, icon: Palette, label: 'Brand Kits' },
           { id: 'assets' as AppView, icon: FolderOpen, label: 'Assets' },
@@ -217,14 +217,20 @@ export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProp
             <TooltipTrigger asChild>
               <button
                 onClick={() => onNavigate(item.id)}
-                className={`p-2 rounded-md transition-colors ${
+                className={`flex items-center rounded-lg transition-colors ${
+                  collapsed
+                    ? 'w-8 h-8 justify-center'
+                    : 'w-full gap-2.5 px-2.5 py-2'
+                } ${
                   activeView === item.id
                     ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                } ${collapsed ? '' : 'flex-1'}`}
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
               >
-                <item.icon className="w-4 h-4" />
-                {!collapsed && <span className="ml-2 text-xs">{item.label}</span>}
+                <item.icon className="w-4 h-4 shrink-0" />
+                {!collapsed && (
+                  <span className="text-xs font-medium truncate">{item.label}</span>
+                )}
               </button>
             </TooltipTrigger>
             <TooltipContent side={collapsed ? 'right' : 'top'}>{item.label}</TooltipContent>
