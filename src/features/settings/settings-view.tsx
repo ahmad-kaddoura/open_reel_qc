@@ -13,8 +13,9 @@ import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sun, Moon, Monitor, Bot, Download, Shield, RotateCcw } from 'lucide-react';
+import { Sun, Moon, Monitor, Bot, Download, Shield, RotateCcw, KeyRound } from 'lucide-react';
 import { QWEN_MODELS, DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS } from '@/core/config';
+import { ApiKeysSection } from '@/features/settings/api-keys-section';
 import type { AgentType } from '@/core/types';
 
 const AGENT_INFO: { type: AgentType; icon: string; category: string }[] = [
@@ -43,8 +44,11 @@ export function SettingsView() {
           <p className="text-sm text-muted-foreground">Configure your VideoForge experience</p>
         </div>
 
-        <Tabs defaultValue="agents" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="api-keys" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="api-keys" className="gap-1.5 text-xs">
+              <KeyRound className="w-3.5 h-3.5" /> API Keys
+            </TabsTrigger>
             <TabsTrigger value="agents" className="gap-1.5 text-xs">
               <Bot className="w-3.5 h-3.5" /> Agents
             </TabsTrigger>
@@ -58,6 +62,11 @@ export function SettingsView() {
               <Sun className="w-3.5 h-3.5" /> Appearance
             </TabsTrigger>
           </TabsList>
+
+          {/* API Keys Tab */}
+          <TabsContent value="api-keys">
+            <ApiKeysSection />
+          </TabsContent>
 
           {/* Agents Tab */}
           <TabsContent value="agents" className="space-y-3">
