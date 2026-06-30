@@ -13,6 +13,7 @@ export interface Project {
   videoBrief?: VideoBrief;
   storyboard?: Storyboard;
   workflowGraph?: WorkflowGraph;
+  creativePlan?: CreativeWorkflowPlan;
   settings: ProjectSettings;
   versions: ProjectVersion[];
   /** Reference images attached during chat brainstorming */
@@ -145,6 +146,11 @@ export interface Scene {
   avoid?: string;
   startFrameUrl?: string;
   endFrameUrl?: string;
+  sceneGoal?: string;
+  motionPrompt?: string;
+  startFramePrompt?: string;
+  endFramePrompt?: string;
+  assetsUsed?: string[];
 }
 
 export type SceneStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed' | 'cancelled' | 'regenerating';
@@ -219,6 +225,36 @@ export interface Character {
   createdAt: string;
 }
 
+// ============= Creative Planning =============
+export type ReusableAssetType = 'character' | 'influencer' | 'brand_identity' | 'product' | 'logo' | 'environment';
+
+export interface ReusableAssetPlan {
+  id: string;
+  type: ReusableAssetType;
+  name: string;
+  description: string;
+  consistencyNotes: string;
+  styleNotes?: string;
+  personality?: string;
+  referenceImagePrompt: string;
+  negativePrompt: string;
+  usageNotes: string;
+  saveTargets: ('brand_identity' | 'project_assets')[];
+}
+
+export interface CreativeWorkflowPlan {
+  id: string;
+  concept: string;
+  summary: string;
+  targetViewer: string;
+  toneAndStyle: string;
+  storyStructure: string[];
+  reusableAssets: ReusableAssetPlan[];
+  scenes: Scene[];
+  consistencyRequirements: string[];
+  renderSettingsDeferred: boolean;
+}
+
 // ============= Chat =============
 export interface ChatAttachment {
   type: 'image';
@@ -238,6 +274,7 @@ export interface ChatMessage {
 }
 
 export type GenerativeUIComponent =
+  | { type: 'creative_workflow_plan'; data: CreativeWorkflowPlan }
   | { type: 'video_brief_form'; data: Partial<VideoBrief> }
   | { type: 'scene_suggestion'; data: Partial<Scene>[] }
   | { type: 'style_selector'; data: { options: StylePreset[]; selected?: StylePreset } }

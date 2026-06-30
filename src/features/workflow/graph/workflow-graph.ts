@@ -1,4 +1,4 @@
-import type { Scene } from '@/core/types';
+import type { ReusableAssetPlan, Scene } from '@/core/types';
 import type { Edge, Node } from '@xyflow/react';
 import { MarkerType } from '@xyflow/react';
 import type { EdgeLabelPlacement } from '@/core/types';
@@ -30,6 +30,7 @@ const FLOW_STROKE = '#d4d4d8';
 const C_PARAMETERS = '#eab308';
 const C_SCRIPT = '#a78bfa';
 const C_FRAMES = '#2dd4bf';
+const C_ASSET = '#22d3ee';
 const C_OUTPUT_OK = '#22c55e';
 const C_OUTPUT_FAIL = '#ef4444';
 const C_OUTPUT_ACTIVE = '#3b82f6';
@@ -52,6 +53,7 @@ export function buildWorkflowGraph(
   savedPositions: NodePositions | null = null,
   edgeLabelPlacement: EdgeLabelPlacement = 'in-node',
   hiddenNodeIds: Record<string, true> = {},
+  reusableAssets: ReusableAssetPlan[] = [],
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -60,6 +62,16 @@ export function buildWorkflowGraph(
   const onEdge = edgeLabelPlacement === 'on-edge';
   const visible = (id: string) => !hiddenNodeIds[id];
   const link = (source: string, target: string) => visible(source) && visible(target);
+
+  reusableAssets.forEach((asset, idx) => {
+    if (!visible(asset.id)) return;
+    nodes.push({
+      id: asset.id,
+      type: 'asset',
+      position: savedPositions?.[asset.id] ?? defaults[asset.id] ?? { x: -220, y: 80 + idx * 180 },
+      data: asset as unknown as Record<string, unknown>,
+    });
+  });
 
   scenes.forEach((scene, idx) => {
     const hasOutput = shouldShowOutputNode(scene);
@@ -145,6 +157,22 @@ export function buildWorkflowGraph(
         markerEnd: { type: MarkerType.ArrowClosed, color: C_FRAMES },
         ...edgeLabels('frames', C_FRAMES, onEdge),
       });
+    }
+
+    for (const assetId of scene.assetsUsed ?? []) {
+      if (link(assetId, scene.id)) {
+        edges.push({
+          id: `e-asset-${assetId}-${scene.id}`,
+          source: assetId,
+          sourceHandle: 'asset-out',
+          target: scene.id,
+          targetHandle: 'asset-in',
+          type: 'smoothstep',
+          style: { stroke: C_ASSET, strokeWidth: 1.5, opacity: 0.75 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: C_ASSET },
+          ...edgeLabels('asset', C_ASSET, onEdge),
+        });
+      }
     }
 
     if (hasOutput && visible(oid)) {

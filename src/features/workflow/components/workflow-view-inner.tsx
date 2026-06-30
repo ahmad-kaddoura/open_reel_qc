@@ -28,6 +28,7 @@ import { OutputNode } from './nodes/output-node';
 import { ParametersNode } from './nodes/params-node';
 import { ScriptNode } from './nodes/script-node';
 import { FramesNode } from './nodes/frames-node';
+import { AssetNode } from './nodes/asset-node';
 import { buildWorkflowGraph } from '../graph/workflow-graph';
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
@@ -39,6 +40,7 @@ const nodeTypes: NodeTypes = {
   parameters: ParametersNode,
   script: ScriptNode,
   frames: FramesNode,
+  asset: AssetNode,
 };
 
 export function WorkflowViewInner() {
@@ -55,7 +57,8 @@ export function WorkflowViewInner() {
   const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
   const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
   const edgeLabelPlacement = useSettingsStore((s) => s.settings.edgeLabelPlacement ?? 'in-node');
-  const { setPhase, currentProjectId } = useProjectStore();
+  const { setPhase, currentProjectId, getCurrentProject } = useProjectStore();
+  const currentProject = getCurrentProject();
   const [, setSelectedNode] = useState<string | null>(null);
   const [outputViewSceneId, setOutputViewSceneId] = useState<string | null>(null);
   const rfRef = useRef<ReactFlowInstance | null>(null);
@@ -101,8 +104,14 @@ export function WorkflowViewInner() {
   );
 
   const { nodes: graphNodes, edges: graphEdges } = useMemo(
-    () => buildWorkflowGraph(scenes, nodePositions, edgeLabelPlacement, hiddenNodeIds),
-    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds],
+    () => buildWorkflowGraph(
+      scenes,
+      nodePositions,
+      edgeLabelPlacement,
+      hiddenNodeIds,
+      currentProject?.creativePlan?.reusableAssets ?? [],
+    ),
+    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
@@ -175,6 +184,7 @@ export function WorkflowViewInner() {
               if (node.type === 'parameters') return 'hsl(45 93% 47%)';
               if (node.type === 'script') return 'hsl(270 60% 60%)';
               if (node.type === 'frames') return 'hsl(173 58% 45%)';
+              if (node.type === 'asset') return 'hsl(188 86% 53%)';
               return 'hsl(var(--primary))';
             }}
             nodeBorderRadius={8}

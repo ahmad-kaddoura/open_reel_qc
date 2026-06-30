@@ -7,10 +7,22 @@ import * as LucideIcons from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { useProjectStore } from '@/features/project/store';
 import { useWorkflowStore } from '@/features/workflow';
-import type { StylePreset, TargetPlatform, VideoBrief, Scene, HookOption, DirectorReview, AspectRatio } from '@/core/types';
+import type {
+  StylePreset,
+  TargetPlatform,
+  VideoBrief,
+  Scene,
+  DirectorReview,
+  AspectRatio,
+  CreativeWorkflowPlan,
+  ReusableAssetPlan,
+} from '@/core/types';
 import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '../lib/video-output-utils';
 
 export interface GenerativeUIOptions {
@@ -26,6 +38,7 @@ export function renderGenerativeUI(
 ): React.ReactNode {
   const opts = options;
   switch (gui.type) {
+    case 'creative_workflow_plan': return <CreativeWorkflowPlanCard key={key} plan={gui.data} />;
     case 'style_selector': return <StyleSelector key={key} options={gui.data.options} />;
     case 'platform_selector': return <PlatformSelector key={key} options={gui.data.options} />;
     case 'aspect_ratio_selector': return <AspectRatioSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
@@ -38,6 +51,137 @@ export function renderGenerativeUI(
     case 'director_review': return <DirectorReviewPanel key={key} review={gui.data} />;
     default: return null;
   }
+}
+
+function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
+  const { updateCurrentProject, setPhase } = useProjectStore();
+  const { buildFromStoryboard } = useWorkflowStore();
+
+  const openWorkflow = async () => {
+    await updateCurrentProject({
+      creativePlan: plan,
+      storyboard: {
+        id: `sb-${Date.now()}`,
+        scenes: plan.scenes,
+        totalDuration: plan.scenes[plan.scenes.length - 1]?.endTime || 0,
+        narrativeArc: plan.storyStructure.join(' → '),
+        notes: plan.summary,
+      },
+    });
+    buildFromStoryboard(plan.scenes);
+    setPhase('workflow');
+  };
+
+  return (
+    <Card className="border-primary/20 bg-card/80">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <LucideIcons.Workflow className="w-4 h-4 text-primary" />
+            Creative Workflow Plan
+          </span>
+          <Button size="sm" className="h-7 text-xs" onClick={openWorkflow}>
+            Open Workflow →
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 text-xs">
+          <PlanLine label="About" value={plan.summary} />
+          <PlanLine label="Viewer" value={plan.targetViewer} />
+          <PlanLine label="Tone" value={plan.toneAndStyle} />
+        </div>
+
+        {plan.reusableAssets.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Reusable assets first</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {plan.reusableAssets.map((asset) => (
+                <ReusableAssetCard key={asset.id} asset={asset} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Workflow scenes</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {plan.scenes.map((scene) => (
+              <div key={scene.id} className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-xs font-semibold line-clamp-1">{scene.title}</span>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">{scene.duration}s</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground line-clamp-2">{scene.sceneGoal || scene.prompt}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">{scene.cameraMovement.replace(/_/g, ' ')}</Badge>
+                  {scene.assetsUsed?.slice(0, 2).map((assetId) => (
+                    <Badge key={assetId} variant="secondary" className="text-[10px] h-4 px-1.5">{assetId.replace('asset-', '').replace(/-/g, ' ')}</Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Render settings</div>
+          <p className="text-[11px] text-muted-foreground">
+            Aspect ratio, duration, platform, model, quality, seed, motion strength, and final negative prompts stay in the output settings panel until this workflow is approved.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PlanLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+      <p className="mt-0.5 text-xs leading-relaxed">{value}</p>
+    </div>
+  );
+}
+
+function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
+  const action = (label: string) => () => {
+    console.info(`[VideoForge] ${label}: ${asset.name}`);
+  };
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold line-clamp-1">{asset.name}</div>
+          <div className="text-[10px] text-muted-foreground capitalize">{asset.type.replace(/_/g, ' ')}</div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="p-1 rounded hover:bg-muted shrink-0" aria-label="Asset actions">
+              <LucideIcons.MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={action('Save to Brand Identity')}>Save to Brand Identity</DropdownMenuItem>
+            <DropdownMenuItem onClick={action('Save to Project Assets')}>Save to Project Assets</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={action('Rename')}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onClick={action('Edit with AI')}>Edit with AI</DropdownMenuItem>
+            <DropdownMenuItem onClick={action('Regenerate')}>Regenerate</DropdownMenuItem>
+            <DropdownMenuItem onClick={action('Duplicate')}>Duplicate</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={action('Delete')} className="text-red-400">Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">{asset.description}</p>
+      <div className="rounded-md bg-background/40 border border-border/40 p-2">
+        <div className="text-[10px] text-muted-foreground mb-1">Reference prompt</div>
+        <p className="text-[10px] leading-relaxed line-clamp-3">{asset.referenceImagePrompt}</p>
+      </div>
+    </div>
+  );
 }
 
 function StyleSelector({ options }: { options: StylePreset[] }) {
@@ -450,27 +594,18 @@ function SceneSuggestionCards({ scenes }: { scenes: Partial<Scene>[] }) {
   );
 }
 
-function HookSuggestions({ hooks }: { hooks: HookOption[] }) {
+function HookSuggestions({ hooks }: { hooks: string[] }) {
   return (
     <div className="space-y-2">
       <div className="text-xs font-medium text-muted-foreground">🎣 Hook Ideas</div>
       <div className="space-y-2">
-        {hooks.map((hook) => (
+        {hooks.map((hook, index) => (
           <div
-            key={hook.id}
+            key={`${hook}-${index}`}
             className="flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-muted/20 hover:border-primary/30 transition-colors cursor-pointer group"
           >
             <div className="flex-1">
-              <p className="text-sm mb-1.5">&ldquo;{hook.text}&rdquo;</p>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                  {hook.style.replace(/_/g, ' ')}
-                </Badge>
-                <div className="flex items-center gap-1.5 flex-1 max-w-[120px]">
-                  <Progress value={hook.estimatedRetention} className="h-1.5" />
-                  <span className="text-[10px] text-muted-foreground">{hook.estimatedRetention}%</span>
-                </div>
-              </div>
+              <p className="text-sm">&ldquo;{hook}&rdquo;</p>
             </div>
           </div>
         ))}

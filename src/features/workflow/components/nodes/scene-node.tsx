@@ -60,12 +60,14 @@ function SceneNodeComponent({ data, id }: NodeProps) {
       <Handle type="target" position={Position.Left} id="parameters-in" className="!w-3 !h-3 !bg-amber-500 !border-2 !border-background" style={{ top: '32%' }} />
       <Handle type="target" position={Position.Left} id="script-in" className="!w-3 !h-3 !bg-violet-500 !border-2 !border-background" style={{ top: '52%' }} />
       <Handle type="target" position={Position.Left} id="frames-in" className="!w-3 !h-3 !bg-teal-500 !border-2 !border-background" style={{ top: '72%' }} />
+      <Handle type="target" position={Position.Left} id="asset-in" className="!w-3 !h-3 !bg-cyan-400 !border-2 !border-background" style={{ top: '88%' }} />
 
       {inNodeLabels && (
         <>
           <PortLabel label="parameters" top="28%" color="hsl(45 93% 47%)" side="left" />
           <PortLabel label="script" top="48%" color="hsl(270 60% 60%)" side="left" />
           <PortLabel label="frames" top="68%" color="hsl(173 58% 45%)" side="left" />
+          <PortLabel label="assets" top="84%" color="hsl(188 86% 53%)" side="left" />
           <PortLabel label="output" top="84%" color="hsl(142 71% 45%)" side="right" />
         </>
       )}

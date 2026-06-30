@@ -14,7 +14,7 @@ import { renderGenerativeUI } from './generative-ui';
 import { VideoConfigPanel } from './video-config-panel';
 import { buildBriefFromProject } from '../lib/chat-handlers';
 import ReactMarkdown from 'react-markdown';
-import type { ChatAttachment, GenerativeUIComponent, Scene, VideoBrief } from '@/core/types';
+import type { ChatAttachment, CreativeWorkflowPlan, GenerativeUIComponent, Scene, VideoBrief } from '@/core/types';
 
 const QUICK_ACTIONS = [
   { label: 'Create Brief', icon: FileText, prompt: 'Create a structured video brief based on our conversation.' },
@@ -23,7 +23,7 @@ const QUICK_ACTIONS = [
   { label: 'AI Review', icon: Eye, prompt: 'Please review my current video plan and give me your director\'s feedback.' },
 ];
 
-type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief';
+type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief' | 'workflow';
 
 function getAssistantPhase(msg: { metadata?: Record<string, unknown> } | undefined): ChatPhase | null {
   if (!msg?.metadata) return null;
@@ -45,6 +45,20 @@ function getStepMeta(msg: { metadata?: Record<string, unknown> } | undefined) {
   return { step, totalSteps, phase: msg.metadata.phase as ChatPhase };
 }
 
+function GenerativeUIRenderer({
+  gui,
+  index,
+  onPresetSelect,
+  disabled,
+}: {
+  gui: GenerativeUIComponent;
+  index: number;
+  onPresetSelect?: (message: string) => void;
+  disabled: boolean;
+}) {
+  return renderGenerativeUI(gui, index, { onPresetSelect, disabled });
+}
+
 export function ChatView() {
   const { currentProjectId, getCurrentProject, updateCurrentProject, setPhase } = useProjectStore();
   const { messages, isStreaming, addMessage, setStreaming } = useChatStore();
@@ -62,7 +76,7 @@ export function ChatView() {
   const chatPhase = getAssistantPhase(lastAssistant);
   const stepMeta = getStepMeta(lastAssistant);
   const lastAssistantId = lastAssistant?.id;
-  const specsComplete = chatPhase === 'ready' || chatPhase === 'brainstorm' || chatPhase === 'brief';
+  const workflowReady = chatPhase === 'workflow';
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -112,9 +126,25 @@ export function ChatView() {
       });
 
       const data = await response.json();
+      let shouldOpenWorkflow = data.phase === 'workflow';
 
       if (data.generativeUI) {
         for (const gui of data.generativeUI as GenerativeUIComponent[]) {
+          if (gui.type === 'creative_workflow_plan' && gui.data) {
+            const plan = gui.data as CreativeWorkflowPlan;
+            await updateCurrentProject({
+              creativePlan: plan,
+              storyboard: {
+                id: `sb-${Date.now()}`,
+                scenes: plan.scenes,
+                totalDuration: plan.scenes[plan.scenes.length - 1]?.endTime || 0,
+                narrativeArc: plan.storyStructure.join(' → '),
+                notes: plan.summary,
+              },
+            });
+            buildFromStoryboard(plan.scenes);
+            shouldOpenWorkflow = true;
+          }
           if (gui.type === 'video_brief_form' && gui.data) {
             await updateCurrentProject({ videoBrief: gui.data as VideoBrief });
           }
@@ -141,6 +171,10 @@ export function ChatView() {
         needsConfig: data.metadata?.needsConfig,
         intent: data.metadata?.intent,
       });
+
+      if (shouldOpenWorkflow) {
+        await setPhase('workflow');
+      }
     } catch {
       await addMessage(currentProjectId, 'assistant', 'Sorry, I encountered an error. Please try again.');
     }
@@ -196,9 +230,9 @@ export function ChatView() {
     }
   };
 
-  const inputPlaceholder = specsComplete
-    ? 'Brainstorm your concept — mood, story, audience… attach reference images with 📎'
-    : 'Describe the video you want to create…';
+  const inputPlaceholder = workflowReady
+    ? 'Refine the workflow — ask for scene, asset, prompt, or motion changes…'
+    : 'Describe the video idea, character, product, story, or goal…';
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -211,7 +245,7 @@ export function ChatView() {
               </div>
               <h2 className="text-lg font-semibold mb-1">Describe Your Video</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Pick your output specs, brainstorm the concept, attach references, then build scenes in the workflow editor.
+                Start with the idea. VideoForge will plan reusable assets, scenes, prompts, and workflow nodes before render settings.
               </p>
             </div>
           )}
@@ -252,10 +286,15 @@ export function ChatView() {
                     {msg.generativeUI.map((gui, idx) => {
                       const isActiveStep =
                         msg.role === 'assistant' && msg.id === lastAssistantId && !isStreaming;
-                      return renderGenerativeUI(gui, idx, {
-                        onPresetSelect: isActiveStep ? handlePresetSelect : undefined,
-                        disabled: !isActiveStep,
-                      });
+                      return (
+                        <GenerativeUIRenderer
+                          key={idx}
+                          gui={gui}
+                          index={idx}
+                          onPresetSelect={isActiveStep ? handlePresetSelect : undefined}
+                          disabled={!isActiveStep}
+                        />
+                      );
                     })}
                   </div>
                 )}
@@ -276,13 +315,13 @@ export function ChatView() {
         </div>
       </ScrollArea>
 
-      {/* Next steps banner after specs are locked */}
-      {specsComplete && (
+      {/* Next steps banner after a creative workflow is ready */}
+      {workflowReady && (
         <div className="px-4 pb-2 shrink-0">
           <div className="max-w-3xl mx-auto rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">Specs saved.</span>{' '}
-              Brainstorm below → Create Brief → Generate Storyboard → edit prompts in Workflow.
+              <span className="text-foreground font-medium">Workflow ready.</span>{' '}
+              Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.
             </div>
             <div className="flex gap-2 shrink-0">
               <Button

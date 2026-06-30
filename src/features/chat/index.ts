@@ -5,6 +5,7 @@ export {
   extractConceptFromMessages,
   buildBriefFromProject,
   buildStoryboardScenes,
+  buildCreativeWorkflowPlan,
   BRAINSTORM_SYSTEM_PROMPT,
   type ChatIntent,
 } from './lib/chat-handlers';
