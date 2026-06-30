@@ -1,0 +1,372 @@
+import { type Node, type Edge } from '@xyflow/react';
+
+// ============= Project Types =============
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailUrl?: string;
+  status: ProjectStatus;
+  currentPhase: ProjectPhase;
+  videoBrief?: VideoBrief;
+  storyboard?: Storyboard;
+  workflowGraph?: WorkflowGraph;
+  settings: ProjectSettings;
+  versions: ProjectVersion[];
+}
+
+export type ProjectStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'archived';
+export type ProjectPhase = 'chat' | 'brief' | 'storyboard' | 'workflow' | 'generation' | 'timeline' | 'export';
+
+export interface ProjectVersion {
+  id: string;
+  name: string;
+  createdAt: string;
+  snapshot: Partial<Project>;
+}
+
+// ============= Video Brief =============
+export interface VideoBrief {
+  title: string;
+  description: string;
+  videoType: VideoType;
+  targetPlatform: TargetPlatform;
+  aspectRatio: AspectRatio;
+  duration: number; // seconds
+  style: StylePreset;
+  mood: string;
+  numberOfScenes: number;
+  sceneDuration: number; // seconds per scene
+  negativePrompt?: string;
+  fps: number;
+  resolution: string;
+  outputFormat: OutputFormat;
+  voiceover?: string;
+  captions?: boolean;
+  musicMood?: string;
+  soundEffectsNotes?: string;
+  cta?: string;
+  audience?: string;
+  brandKitId?: string;
+  characterIds: string[];
+  productDetails?: ProductDetails;
+}
+
+export type VideoType =
+  | 'ad' | 'cinematic' | 'reel' | 'influencer' | 'product'
+  | 'storytelling' | 'app_promo' | 'motivational' | 'ugc' | 'creative_concept';
+
+export type TargetPlatform =
+  | 'tiktok' | 'instagram_reels' | 'youtube_shorts' | 'youtube'
+  | 'instagram_feed' | 'instagram_story' | 'facebook'
+  | 'linkedin' | 'twitter' | 'website' | 'custom';
+
+export type AspectRatio = '9:16' | '1:1' | '16:9' | '4:5' | 'custom';
+export type OutputFormat = 'mp4' | 'webm' | 'mov';
+
+// ============= Style Presets =============
+export type StylePreset =
+  | 'cinematic' | 'luxury_ad' | 'ugc_influencer' | 'realistic_product'
+  | 'anime' | 'dark_scifi' | 'documentary' | 'podcast_clip'
+  | 'fashion_campaign' | 'app_promo' | 'real_estate' | 'food_commercial'
+  | 'motivational_reel' | 'product_launch' | 'fitness_ad' | 'travel_video' | 'tech_commercial'
+  | 'custom';
+
+export type CameraMovement =
+  | 'dolly_in' | 'dolly_out' | 'orbit' | 'handheld' | 'drone'
+  | 'close_up' | 'wide_shot' | 'tracking_shot' | 'slow_push_in' | 'top_down'
+  | 'static' | 'pan_left' | 'pan_right' | 'tilt_up' | 'tilt_down';
+
+export type Transition =
+  | 'cut' | 'fade' | 'whip_pan' | 'zoom' | 'match_cut' | 'cross_dissolve';
+
+// ============= Product Details =============
+export interface ProductDetails {
+  name: string;
+  description: string;
+  features: string[];
+  referenceImageUrls: string[];
+  colorScheme?: string[];
+  tagline?: string;
+}
+
+// ============= Storyboard =============
+export interface Storyboard {
+  id: string;
+  scenes: Scene[];
+  totalDuration: number;
+  narrativeArc: string;
+  notes?: string;
+}
+
+export interface Scene {
+  id: string;
+  order: number;
+  title: string;
+  prompt: string;
+  enhancedPrompt?: string;
+  negativePrompt?: string;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  narration?: string;
+  visualDirection?: string;
+  cameraMovement: CameraMovement;
+  mood: string;
+  characters: string[];
+  props: string[];
+  productPlacement?: string;
+  transition: Transition;
+  textOverlays: TextOverlay[];
+  captions?: string;
+  referenceImageUrls: string[];
+  generatedStartFrameUrl?: string;
+  generatedEndFrameUrl?: string;
+  generatedVideoUrl?: string;
+  generatedAudioUrl?: string;
+  stylePreset: StylePreset;
+  voiceover?: string;
+  status: SceneStatus;
+  versions: SceneVersion[];
+  costEstimate?: number;
+  cta?: string;
+  platformNotes?: string;
+}
+
+export type SceneStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed' | 'cancelled' | 'regenerating';
+
+export interface SceneVersion {
+  id: string;
+  sceneId: string;
+  prompt: string;
+  generatedImageUrl?: string;
+  generatedVideoUrl?: string;
+  createdAt: string;
+}
+
+export interface TextOverlay {
+  id: string;
+  text: string;
+  type: 'title' | 'subtitle' | 'caption' | 'lower_third' | 'cta' | 'product_label' | 'custom';
+  position: { x: number; y: number };
+  style: {
+    fontSize: number;
+    color: string;
+    fontFamily?: string;
+    fontWeight?: string;
+    animation?: string;
+    backgroundColor?: string;
+    padding?: number;
+  };
+  startTime: number;
+  endTime: number;
+}
+
+// ============= Workflow =============
+export interface WorkflowGraph {
+  nodes: Node[];
+  edges: Edge[];
+  metadata: WorkflowMetadata;
+}
+
+export interface WorkflowMetadata {
+  lastModified: string;
+  viewport?: { x: number; y: number; zoom: number };
+}
+
+// ============= Brand Kit =============
+export interface BrandKit {
+  id: string;
+  name: string;
+  brandName: string;
+  colors: string[];
+  logoUrls: string[];
+  fonts: string[];
+  toneOfVoice: string;
+  productImageUrls: string[];
+  targetAudience: string;
+  ctaStyle: string;
+  visualIdentity: string;
+  brandRules: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============= Character =============
+export interface Character {
+  id: string;
+  name: string;
+  appearance: string;
+  outfit: string;
+  personality: string;
+  voiceStyle: string;
+  referenceImageUrls: string[];
+  consistencyNotes: string;
+  createdAt: string;
+}
+
+// ============= Chat =============
+export interface ChatMessage {
+  id: string;
+  projectId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  generativeUI?: GenerativeUIComponent[];
+  metadata?: Record<string, unknown>;
+}
+
+export type GenerativeUIComponent =
+  | { type: 'video_brief_form'; data: Partial<VideoBrief> }
+  | { type: 'scene_suggestion'; data: Partial<Scene>[] }
+  | { type: 'style_selector'; data: { options: StylePreset[]; selected?: StylePreset } }
+  | { type: 'platform_selector'; data: { options: TargetPlatform[]; selected?: TargetPlatform } }
+  | { type: 'aspect_ratio_preview'; data: { ratio: AspectRatio } }
+  | { type: 'character_form'; data: Partial<Character> }
+  | { type: 'product_form'; data: Partial<ProductDetails> }
+  | { type: 'hook_suggestions'; data: { hooks: string[] } }
+  | { type: 'director_review'; data: DirectorReview }
+  | { type: 'confirmation'; data: { message: string; action: string } };
+
+// ============= AI Director =============
+export interface DirectorReview {
+  overallScore: number;
+  pacing: string;
+  visualConsistency: string;
+  characterConsistency: string;
+  productConsistency: string;
+  ctaAssessment: string;
+  weakScenes: number[];
+  suggestions: string[];
+  styleMatch: string;
+  transitionQuality: string;
+  overallQuality: string;
+}
+
+// ============= Agent =============
+export interface AgentConfig {
+  id: AgentType;
+  name: string;
+  description: string;
+  modelId: string;
+  temperature: number;
+  maxTokens: number;
+  systemPrompt: string;
+  enabled: boolean;
+}
+
+export type AgentType =
+  | 'chat_planner'
+  | 'prompt_enhancer'
+  | 'storyboard_writer'
+  | 'scene_generator'
+  | 'image_generator'
+  | 'frame_generator'
+  | 'video_generator'
+  | 'voiceover_agent'
+  | 'caption_agent'
+  | 'ai_director'
+  | 'video_assembler'
+  | 'hook_generator';
+
+// ============= App Settings =============
+export interface AppSettings {
+  agentConfigs: Record<AgentType, AgentConfig>;
+  exportPresets: ExportPreset[];
+  costControls: CostControls;
+  theme: 'light' | 'dark' | 'system';
+  defaultAspectRatio: AspectRatio;
+  defaultPlatform: TargetPlatform;
+  defaultFps: number;
+}
+
+export interface ExportPreset {
+  id: string;
+  name: string;
+  platform: TargetPlatform;
+  aspectRatio: AspectRatio;
+  resolution: string;
+  fps: number;
+  maxDuration: number;
+  format: OutputFormat;
+  quality: 'low' | 'medium' | 'high' | 'ultra';
+}
+
+export interface CostControls {
+  maxParallelGenerations: number;
+  maxDuration: number;
+  maxRetries: number;
+  maxOutputQuality: 'low' | 'medium' | 'high' | 'ultra';
+  maxScenes: number;
+  maxVersions: number;
+}
+
+// ============= Generation Job =============
+export interface GenerationJob {
+  id: string;
+  projectId: string;
+  sceneId?: string;
+  type: 'image' | 'video' | 'audio' | 'frame';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  outputUrl?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ============= Asset =============
+export interface Asset {
+  id: string;
+  projectId: string;
+  name: string;
+  type: 'image' | 'video' | 'audio' | 'reference';
+  url: string;
+  thumbnailUrl?: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+  sceneId?: string;
+}
+
+// ============= Project Settings =============
+export interface ProjectSettings {
+  aspectRatio: AspectRatio;
+  targetPlatform: TargetPlatform;
+  fps: number;
+  resolution: string;
+  outputFormat: OutputFormat;
+  quality: 'low' | 'medium' | 'high' | 'ultra';
+}
+
+// ============= Hook Generator =============
+export interface HookOption {
+  id: string;
+  text: string;
+  style: 'hook_question' | 'bold_statement' | 'shocking_stat' | 'story_open' | 'problem_agitate' | 'social_proof' | 'curiosity_gap';
+  estimatedRetention: number; // 0-100
+}
+
+// ============= Timeline =============
+export interface TimelineTrack {
+  id: string;
+  type: 'video' | 'audio' | 'caption' | 'overlay';
+  name: string;
+  clips: TimelineClip[];
+}
+
+export interface TimelineClip {
+  id: string;
+  trackId: string;
+  sceneId?: string;
+  assetId?: string;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  label: string;
+  color?: string;
+}

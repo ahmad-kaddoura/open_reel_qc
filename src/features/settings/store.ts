@@ -1,0 +1,112 @@
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls } from '@/core/types';
+import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS } from '@/core/config';
+
+interface SettingsState {
+  settings: AppSettings;
+
+  // Agent config
+  getAgentConfig: (type: AgentType) => AgentConfig;
+  updateAgentConfig: (type: AgentType, updates: Partial<AgentConfig>) => void;
+
+  // Export presets
+  addExportPreset: (preset: ExportPreset) => void;
+  removeExportPreset: (id: string) => void;
+  updateExportPreset: (id: string, updates: Partial<ExportPreset>) => void;
+
+  // Cost controls
+  updateCostControls: (updates: Partial<CostControls>) => void;
+
+  // Theme
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+
+  // Defaults
+  setDefaultAspectRatio: (ratio: AppSettings['defaultAspectRatio']) => void;
+  setDefaultPlatform: (platform: AppSettings['defaultPlatform']) => void;
+}
+
+const defaultSettings: AppSettings = {
+  agentConfigs: DEFAULT_AGENT_CONFIGS,
+  exportPresets: EXPORT_PRESETS,
+  costControls: DEFAULT_COST_CONTROLS,
+  theme: 'dark',
+  defaultAspectRatio: '9:16',
+  defaultPlatform: 'tiktok',
+  defaultFps: 30,
+};
+
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set, get) => ({
+      settings: defaultSettings,
+
+      getAgentConfig: (type) => {
+        return get().settings.agentConfigs[type];
+      },
+
+      updateAgentConfig: (type, updates) => {
+        set((s) => {
+          (s.settings.agentConfigs[type] as AgentConfig) = {
+            ...s.settings.agentConfigs[type],
+            ...updates,
+          };
+        });
+      },
+
+      addExportPreset: (preset) => {
+        set((s) => {
+          s.settings.exportPresets.push(preset);
+        });
+      },
+
+      removeExportPreset: (id) => {
+        set((s) => {
+          s.settings.exportPresets = s.settings.exportPresets.filter((p) => p.id !== id);
+        });
+      },
+
+      updateExportPreset: (id, updates) => {
+        set((s) => {
+          const idx = s.settings.exportPresets.findIndex((p) => p.id === id);
+          if (idx >= 0) {
+            s.settings.exportPresets[idx] = { ...s.settings.exportPresets[idx], ...updates };
+          }
+        });
+      },
+
+      updateCostControls: (updates) => {
+        set((s) => {
+          Object.assign(s.settings.costControls, updates);
+        });
+      },
+
+      setTheme: (theme) => {
+        set((s) => { s.settings.theme = theme; });
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else if (theme === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        }
+      },
+
+      setDefaultAspectRatio: (ratio) => {
+        set((s) => { s.settings.defaultAspectRatio = ratio; });
+      },
+
+      setDefaultPlatform: (platform) => {
+        set((s) => { s.settings.defaultPlatform = platform; });
+      },
+    }),
+    {
+      name: 'videoforge-settings',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);
