@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { nanoid } from 'nanoid';
 import { storage } from '@/services/storage/indexeddb';
-import type { ChatMessage, GenerativeUIComponent } from '@/core/types';
+import type { ChatMessage, GenerativeUIComponent, ChatAttachment } from '@/core/types';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -10,7 +10,14 @@ interface ChatState {
   isStreaming: boolean;
 
   loadMessages: (projectId: string) => Promise<void>;
-  addMessage: (projectId: string, role: ChatMessage['role'], content: string, generativeUI?: GenerativeUIComponent[], metadata?: Record<string, unknown>) => Promise<void>;
+  addMessage: (
+    projectId: string,
+    role: ChatMessage['role'],
+    content: string,
+    generativeUI?: GenerativeUIComponent[],
+    metadata?: Record<string, unknown>,
+    attachments?: ChatAttachment[]
+  ) => Promise<void>;
   updateLastAssistantMessage: (content: string) => void;
   setStreaming: (streaming: boolean) => void;
   clearMessages: (projectId: string) => Promise<void>;
@@ -37,7 +44,7 @@ export const useChatStore = create<ChatState>()(
       }
     },
 
-    addMessage: async (projectId, role, content, generativeUI, metadata) => {
+    addMessage: async (projectId, role, content, generativeUI, metadata, attachments) => {
       const msg: ChatMessage = {
         id: nanoid(),
         projectId,
@@ -46,6 +53,7 @@ export const useChatStore = create<ChatState>()(
         timestamp: new Date().toISOString(),
         generativeUI,
         metadata,
+        attachments,
       };
       await storage.saveChatMessage(msg);
       set((s) => {

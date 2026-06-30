@@ -15,6 +15,8 @@ export interface Project {
   workflowGraph?: WorkflowGraph;
   settings: ProjectSettings;
   versions: ProjectVersion[];
+  /** Reference images attached during chat brainstorming */
+  referenceImageUrls?: string[];
 }
 
 export type ProjectStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'archived';
@@ -208,12 +210,19 @@ export interface Character {
 }
 
 // ============= Chat =============
+export interface ChatAttachment {
+  type: 'image';
+  url: string;
+  name: string;
+}
+
 export interface ChatMessage {
   id: string;
   projectId: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
+  attachments?: ChatAttachment[];
   generativeUI?: GenerativeUIComponent[];
   metadata?: Record<string, unknown>;
 }

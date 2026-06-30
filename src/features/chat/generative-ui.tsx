@@ -402,6 +402,7 @@ function SceneSuggestionCards({ scenes }: { scenes: Partial<Scene>[] }) {
       stylePreset: s.stylePreset || 'cinematic',
       status: 'idle' as const,
       versions: s.versions || [],
+      referenceImageUrls: s.referenceImageUrls || [],
       narration: s.narration,
       cta: s.cta,
     })) as Scene[];
@@ -415,6 +416,7 @@ function SceneSuggestionCards({ scenes }: { scenes: Partial<Scene>[] }) {
       },
     });
     buildFromStoryboard(fullScenes);
+    setPhase('workflow');
   };
 
   return (
@@ -422,7 +424,7 @@ function SceneSuggestionCards({ scenes }: { scenes: Partial<Scene>[] }) {
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium text-muted-foreground">🎬 Suggested Scenes ({scenes.length})</div>
         <Button size="sm" onClick={handleAccept} className="h-7 text-xs gap-1">
-          Accept All & Continue →
+          Accept All & Open Workflow →
         </Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
