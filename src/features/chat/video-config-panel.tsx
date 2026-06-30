@@ -95,7 +95,9 @@ export function VideoConfigPanel({ onDone }: VideoConfigPanelProps) {
         <p className="text-xs text-muted-foreground mt-0.5">{current.description}</p>
       </div>
 
-      {renderGenerativeUI(current.gui, step)}
+      {renderGenerativeUI(current.gui, step, {
+        onPresetSelect: () => setStep((s) => Math.min(s + 1, STEPS.length - 1)),
+      })}
 
       {/* Live summary */}
       {summary && (

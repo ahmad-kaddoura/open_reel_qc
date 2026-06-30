@@ -54,6 +54,7 @@ export function ChatView() {
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
   const stepMeta = getStepMeta(lastAssistant);
+  const lastAssistantId = lastAssistant?.id;
 
   // Auto-scroll to bottom on new content.
   useEffect(() => {
@@ -124,6 +125,13 @@ export function ChatView() {
     isSendingRef.current = false;
   }, [input, currentProjectId, messages, addMessage, setStreaming, updateCurrentProject, buildFromStoryboard, currentProject]);
 
+  const handlePresetSelect = useCallback(
+    (message: string) => {
+      void handleSend(message);
+    },
+    [handleSend]
+  );
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -172,7 +180,14 @@ export function ChatView() {
 
                   {msg.generativeUI && msg.generativeUI.length > 0 && (
                     <div className="mt-3 space-y-3">
-                      {msg.generativeUI.map((gui, idx) => renderGenerativeUI(gui, idx))}
+                      {msg.generativeUI.map((gui, idx) => {
+                        const isActiveStep =
+                          msg.role === 'assistant' && msg.id === lastAssistantId && !isStreaming;
+                        return renderGenerativeUI(gui, idx, {
+                          onPresetSelect: isActiveStep ? handlePresetSelect : undefined,
+                          disabled: !isActiveStep,
+                        });
+                      })}
                     </div>
                   )}
                 </div>

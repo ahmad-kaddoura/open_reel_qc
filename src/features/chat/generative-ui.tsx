@@ -11,15 +11,27 @@ import { Progress } from '@/components/ui/progress';
 import { useProjectStore } from '@/features/project/store';
 import { useWorkflowStore } from '@/features/workflow/store';
 import type { StylePreset, TargetPlatform, VideoBrief, Scene, HookOption, DirectorReview, AspectRatio } from '@/core/types';
+import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '@/features/chat/video-output-utils';
 
-export function renderGenerativeUI(gui: GenerativeUIComponent, key: number): React.ReactNode {
+export interface GenerativeUIOptions {
+  /** When set, clicking a preset saves prefs and sends this as the user message. */
+  onPresetSelect?: (message: string) => void;
+  disabled?: boolean;
+}
+
+export function renderGenerativeUI(
+  gui: GenerativeUIComponent,
+  key: number,
+  options?: GenerativeUIOptions
+): React.ReactNode {
+  const opts = options;
   switch (gui.type) {
     case 'style_selector': return <StyleSelector key={key} options={gui.data.options} />;
     case 'platform_selector': return <PlatformSelector key={key} options={gui.data.options} />;
-    case 'aspect_ratio_selector': return <AspectRatioSelector key={key} options={gui.data.options} selected={gui.data.selected} />;
-    case 'duration_selector': return <DurationSelector key={key} options={gui.data.options} selected={gui.data.selected} />;
-    case 'resolution_selector': return <ResolutionSelector key={key} options={gui.data.options} selected={gui.data.selected} />;
-    case 'fps_selector': return <FpsSelector key={key} options={gui.data.options} selected={gui.data.selected} />;
+    case 'aspect_ratio_selector': return <AspectRatioSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
+    case 'duration_selector': return <DurationSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
+    case 'resolution_selector': return <ResolutionSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
+    case 'fps_selector': return <FpsSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
     case 'video_brief_form': return <VideoBriefForm key={key} data={gui.data} />;
     case 'scene_suggestion': return <SceneSuggestionCards key={key} scenes={gui.data} />;
     case 'hook_suggestions': return <HookSuggestions key={key} hooks={gui.data.hooks} />;
@@ -92,7 +104,17 @@ function PlatformSelector({ options }: { options: TargetPlatform[] }) {
   );
 }
 
-function AspectRatioSelector({ options, selected }: { options: AspectRatio[]; selected?: AspectRatio }) {
+function AspectRatioSelector({
+  options,
+  selected,
+  onPresetSelect,
+  disabled,
+}: {
+  options: AspectRatio[];
+  selected?: AspectRatio;
+  onPresetSelect?: (message: string) => void;
+  disabled?: boolean;
+}) {
   const { updateCurrentProject, getCurrentProject } = useProjectStore();
   const project = getCurrentProject();
   const current = selected || project?.settings.aspectRatio;
@@ -105,6 +127,21 @@ function AspectRatioSelector({ options, selected }: { options: AspectRatio[]; se
     'custom': { w: 30, h: 20, label: 'Custom' },
   };
 
+  const handleSelect = async (ratio: AspectRatio) => {
+    if (!project || disabled) return;
+    const p = previews[ratio];
+    const pixels = pixelsFromResolutionLabel(
+      resolutionLabelFromPixels(project.settings.resolution) ?? '1080p',
+      ratio
+    );
+    const brief = buildVideoBriefPatch(project, { aspectRatio: ratio, resolution: pixels });
+    await updateCurrentProject({
+      settings: { ...project.settings, aspectRatio: ratio, resolution: pixels },
+      videoBrief: brief,
+    });
+    onPresetSelect?.(`${ratio} (${p.label}) aspect ratio`);
+  };
+
   return (
     <div className="space-y-2">
       <div className="text-xs font-medium text-muted-foreground">🖼️ Aspect Ratio</div>
@@ -115,16 +152,14 @@ function AspectRatioSelector({ options, selected }: { options: AspectRatio[]; se
           return (
             <button
               key={ratio}
-              onClick={() => {
-                updateCurrentProject({
-                  settings: { ...project!.settings, aspectRatio: ratio },
-                });
-              }}
+              type="button"
+              disabled={disabled}
+              onClick={() => handleSelect(ratio)}
               className={`flex flex-col items-center gap-1.5 p-2.5 rounded-lg border text-xs transition-all ${
                 isActive
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border hover:border-primary/40'
-              }`}
+              } ${disabled ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
             >
               <div className="h-9 flex items-center justify-center">
                 <div
@@ -142,10 +177,27 @@ function AspectRatioSelector({ options, selected }: { options: AspectRatio[]; se
   );
 }
 
-function DurationSelector({ options, selected }: { options: { id: string; label: string; seconds: number }[]; selected?: string }) {
+function DurationSelector({
+  options,
+  selected,
+  onPresetSelect,
+  disabled,
+}: {
+  options: { id: string; label: string; seconds: number }[];
+  selected?: string;
+  onPresetSelect?: (message: string) => void;
+  disabled?: boolean;
+}) {
   const { updateCurrentProject, getCurrentProject } = useProjectStore();
   const project = getCurrentProject();
   const activeId = selected || (project?.videoBrief?.duration ? `d-${project.videoBrief.duration}` : undefined);
+
+  const handleSelect = async (opt: { id: string; label: string; seconds: number }) => {
+    if (!project || disabled) return;
+    const brief = buildVideoBriefPatch(project, { duration: opt.seconds });
+    await updateCurrentProject({ videoBrief: brief });
+    onPresetSelect?.(`${opt.label} — ${opt.seconds} seconds`);
+  };
 
   return (
     <div className="space-y-2">
@@ -156,14 +208,12 @@ function DurationSelector({ options, selected }: { options: { id: string; label:
           return (
             <button
               key={opt.id}
-              onClick={() => {
-                updateCurrentProject({
-                  videoBrief: { ...project!.videoBrief, duration: opt.seconds } as VideoBrief,
-                });
-              }}
+              type="button"
+              disabled={disabled}
+              onClick={() => handleSelect(opt)}
               className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
-              }`}
+              } ${disabled ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
             >
               {opt.label}
               <span className="ml-1.5 text-muted-foreground font-normal text-[10px]">{opt.seconds}s</span>
@@ -175,10 +225,31 @@ function DurationSelector({ options, selected }: { options: { id: string; label:
   );
 }
 
-function ResolutionSelector({ options, selected }: { options: string[]; selected?: string }) {
+function ResolutionSelector({
+  options,
+  selected,
+  onPresetSelect,
+  disabled,
+}: {
+  options: string[];
+  selected?: string;
+  onPresetSelect?: (message: string) => void;
+  disabled?: boolean;
+}) {
   const { updateCurrentProject, getCurrentProject } = useProjectStore();
   const project = getCurrentProject();
-  const current = selected || project?.settings.resolution;
+  const current = selected || resolutionLabelFromPixels(project?.settings.resolution);
+
+  const handleSelect = async (label: string) => {
+    if (!project || disabled) return;
+    const pixels = pixelsFromResolutionLabel(label, project.settings.aspectRatio);
+    const brief = buildVideoBriefPatch(project, { resolution: pixels });
+    await updateCurrentProject({
+      settings: { ...project.settings, resolution: pixels },
+      videoBrief: brief,
+    });
+    onPresetSelect?.(`${label} resolution`);
+  };
 
   return (
     <div className="space-y-2">
@@ -189,14 +260,12 @@ function ResolutionSelector({ options, selected }: { options: string[]; selected
           return (
             <button
               key={res}
-              onClick={() => {
-                updateCurrentProject({
-                  settings: { ...project!.settings, resolution: res },
-                });
-              }}
+              type="button"
+              disabled={disabled}
+              onClick={() => handleSelect(res)}
               className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
-              }`}
+              } ${disabled ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
             >
               {res}
             </button>
@@ -207,10 +276,30 @@ function ResolutionSelector({ options, selected }: { options: string[]; selected
   );
 }
 
-function FpsSelector({ options, selected }: { options: number[]; selected?: number }) {
+function FpsSelector({
+  options,
+  selected,
+  onPresetSelect,
+  disabled,
+}: {
+  options: number[];
+  selected?: number;
+  onPresetSelect?: (message: string) => void;
+  disabled?: boolean;
+}) {
   const { updateCurrentProject, getCurrentProject } = useProjectStore();
   const project = getCurrentProject();
-  const current = selected || project?.settings.fps;
+  const current = selected ?? project?.settings.fps;
+
+  const handleSelect = async (fps: number) => {
+    if (!project || disabled) return;
+    const brief = buildVideoBriefPatch(project, { fps });
+    await updateCurrentProject({
+      settings: { ...project.settings, fps },
+      videoBrief: brief,
+    });
+    onPresetSelect?.(`${fps} fps`);
+  };
 
   return (
     <div className="space-y-2">
@@ -221,14 +310,12 @@ function FpsSelector({ options, selected }: { options: number[]; selected?: numb
           return (
             <button
               key={fps}
-              onClick={() => {
-                updateCurrentProject({
-                  settings: { ...project!.settings, fps },
-                });
-              }}
+              type="button"
+              disabled={disabled}
+              onClick={() => handleSelect(fps)}
               className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
                 isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40'
-              }`}
+              } ${disabled ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
             >
               {fps} fps
             </button>
