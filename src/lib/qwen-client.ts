@@ -11,6 +11,11 @@ export interface QwenConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  imageModel: string;
+  frameModel: string;
+  videoModel: string;
+  directorModel: string;
+  effort: 'low' | 'medium' | 'high';
 }
 
 export async function getQwenConfig(): Promise<QwenConfig | null> {
@@ -20,11 +25,25 @@ export async function getQwenConfig(): Promise<QwenConfig | null> {
     fromFile.QWEN_BASE_URL ||
     process.env.QWEN_BASE_URL ||
     DEFAULT_QWEN_BASE_URL;
-  const model = process.env.QWEN_PLANNER_MODEL || 'qwen-plus';
+  const effort = (process.env.QWEN_GENERATION_EFFORT || 'high') as QwenConfig['effort'];
+  const model = process.env.QWEN_PLANNER_MODEL || (effort === 'low' ? 'qwen-turbo' : effort === 'medium' ? 'qwen-plus' : 'qwen-max');
+  const imageModel = process.env.QWEN_IMAGE_MODEL || (effort === 'low' ? 'qwen-image' : 'qwen-image-plus');
+  const frameModel = process.env.QWEN_FRAME_MODEL || imageModel;
+  const videoModel = process.env.QWEN_VIDEO_MODEL || (effort === 'low' ? 'wan2.1-i2v-turbo' : 'wan2.1-i2v-plus');
+  const directorModel = process.env.QWEN_DIRECTOR_MODEL || (effort === 'low' ? 'qwen-vl-plus' : 'qwen-vl-max');
 
   if (!isEnvValueConfigured(apiKey)) return null;
 
-  return { apiKey: apiKey!.trim(), baseUrl: baseUrl.trim(), model };
+  return {
+    apiKey: apiKey!.trim(),
+    baseUrl: baseUrl.trim(),
+    model,
+    imageModel,
+    frameModel,
+    videoModel,
+    directorModel,
+    effort,
+  };
 }
 
 export type QwenCallError =
@@ -101,4 +120,289 @@ export async function callQwenChat(
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content ?? '';
   return { content, usage: data?.usage };
+}
+
+export async function callQwenImageGeneration(
+  config: QwenConfig,
+  prompt: string,
+  options?: {
+    model?: string;
+    size?: string;
+    negativePrompt?: string;
+  }
+): Promise<{ url: string; model: string }> {
+  const url = `${config.baseUrl.replace(/\/$/, '')}/images/generations`;
+  const model = options?.model || config.imageModel;
+  const fullPrompt = options?.negativePrompt
+    ? `${prompt}\n\nNegative prompt: ${options.negativePrompt}`
+    : prompt;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        prompt: fullPrompt,
+        n: 1,
+        size: options?.size ?? '1024x1792',
+        response_format: 'url',
+      }),
+    });
+  } catch (err) {
+    const hostname = (() => {
+      try {
+        return new URL(config.baseUrl).hostname;
+      } catch {
+        return undefined;
+      }
+    })();
+    throw {
+      kind: 'network',
+      message: err instanceof Error ? err.message : 'Network request failed',
+      hostname,
+    } satisfies QwenCallError;
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw {
+      kind: 'auth',
+      status: response.status,
+      message: `Qwen image API key rejected (${response.status}).`,
+    } satisfies QwenCallError;
+  }
+
+  if (response.status === 404) {
+    return callDashScopeImageSynthesis(config, fullPrompt, {
+      model,
+      size: options?.size ?? '1024x1792',
+    });
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw {
+      kind: 'api',
+      status: response.status,
+      message: body.slice(0, 500) || `Qwen image API error ${response.status}`,
+    } satisfies QwenCallError;
+  }
+
+  const data = await response.json();
+  const imageUrl = data?.data?.[0]?.url ||
+    (data?.data?.[0]?.b64_json ? `data:image/png;base64,${data.data[0].b64_json}` : '');
+
+  if (!imageUrl) {
+    throw {
+      kind: 'api',
+      status: 502,
+      message: 'Qwen image API returned no image URL.',
+    } satisfies QwenCallError;
+  }
+
+  return { url: imageUrl, model };
+}
+
+function dashScopeBaseUrl(baseUrl: string): string {
+  return baseUrl
+    .replace(/\/compatible-mode\/v1\/?$/, '')
+    .replace(/\/v1\/?$/, '')
+    .replace(/\/$/, '');
+}
+
+async function callDashScopeImageSynthesis(
+  config: QwenConfig,
+  prompt: string,
+  options: { model: string; size: string }
+): Promise<{ url: string; model: string }> {
+  const base = dashScopeBaseUrl(config.baseUrl);
+  const submitUrl = `${base}/api/v1/services/aigc/text2image/image-synthesis`;
+  const size = options.size.replace('x', '*');
+
+  const submit = await fetch(submitUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+      'X-DashScope-Async': 'enable',
+    },
+    body: JSON.stringify({
+      model: options.model,
+      input: { prompt },
+      parameters: {
+        size,
+        n: 1,
+      },
+    }),
+  });
+
+  if (!submit.ok) {
+    const body = await submit.text().catch(() => '');
+    throw {
+      kind: submit.status === 401 || submit.status === 403 ? 'auth' : 'api',
+      status: submit.status,
+      message: body.slice(0, 500) || `DashScope image synthesis error ${submit.status}`,
+    } satisfies QwenCallError;
+  }
+
+  const submitted = await submit.json();
+  const taskId = submitted?.output?.task_id || submitted?.task_id;
+  if (!taskId) {
+    throw {
+      kind: 'api',
+      status: 502,
+      message: 'DashScope image synthesis returned no task id.',
+    } satisfies QwenCallError;
+  }
+
+  const taskUrl = `${base}/api/v1/tasks/${taskId}`;
+  for (let i = 0; i < 36; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const task = await fetch(taskUrl, {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+
+    if (!task.ok) {
+      const body = await task.text().catch(() => '');
+      throw {
+        kind: task.status === 401 || task.status === 403 ? 'auth' : 'api',
+        status: task.status,
+        message: body.slice(0, 500) || `DashScope task polling error ${task.status}`,
+      } satisfies QwenCallError;
+    }
+
+    const data = await task.json();
+    const status = data?.output?.task_status;
+    if (status === 'SUCCEEDED') {
+      const imageUrl = data?.output?.results?.[0]?.url || data?.output?.result_url;
+      if (!imageUrl) {
+        throw {
+          kind: 'api',
+          status: 502,
+          message: 'DashScope image task succeeded but returned no image URL.',
+        } satisfies QwenCallError;
+      }
+      return { url: imageUrl, model: options.model };
+    }
+    if (status === 'FAILED' || status === 'CANCELED' || status === 'UNKNOWN') {
+      throw {
+        kind: 'api',
+        status: 502,
+        message: data?.output?.message || `DashScope image task ${status.toLowerCase()}.`,
+      } satisfies QwenCallError;
+    }
+  }
+
+  throw {
+    kind: 'api',
+    status: 504,
+    message: 'DashScope image generation timed out.',
+  } satisfies QwenCallError;
+}
+
+export async function callQwenVideoGeneration(
+  config: QwenConfig,
+  options: {
+    prompt: string;
+    startFrameUrl?: string;
+    endFrameUrl?: string;
+    model?: string;
+  },
+): Promise<{ url: string; model: string }> {
+  const base = dashScopeBaseUrl(config.baseUrl);
+  const submitUrl = `${base}/api/v1/services/aigc/video-generation/video-synthesis`;
+  const model = options.model || config.videoModel;
+
+  const submit = await fetch(submitUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+      'X-DashScope-Async': 'enable',
+    },
+    body: JSON.stringify({
+      model,
+      input: {
+        prompt: options.prompt,
+        img_url: options.startFrameUrl,
+        first_frame_url: options.startFrameUrl,
+        last_frame_url: options.endFrameUrl,
+      },
+      parameters: {
+        resolution: '720P',
+        prompt_extend: true,
+      },
+    }),
+  });
+
+  if (!submit.ok) {
+    const body = await submit.text().catch(() => '');
+    throw {
+      kind: submit.status === 401 || submit.status === 403 ? 'auth' : 'api',
+      status: submit.status,
+      message: body.slice(0, 500) || `DashScope video synthesis error ${submit.status}`,
+    } satisfies QwenCallError;
+  }
+
+  const submitted = await submit.json();
+  const taskId = submitted?.output?.task_id || submitted?.task_id;
+  if (!taskId) {
+    throw {
+      kind: 'api',
+      status: 502,
+      message: 'DashScope video synthesis returned no task id.',
+    } satisfies QwenCallError;
+  }
+
+  const taskUrl = `${base}/api/v1/tasks/${taskId}`;
+  for (let i = 0; i < 120; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const task = await fetch(taskUrl, {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+
+    if (!task.ok) {
+      const body = await task.text().catch(() => '');
+      throw {
+        kind: task.status === 401 || task.status === 403 ? 'auth' : 'api',
+        status: task.status,
+        message: body.slice(0, 500) || `DashScope video task polling error ${task.status}`,
+      } satisfies QwenCallError;
+    }
+
+    const data = await task.json();
+    const status = data?.output?.task_status;
+    if (status === 'SUCCEEDED') {
+      const videoUrl = data?.output?.video_url || data?.output?.results?.[0]?.url || data?.output?.result_url;
+      if (!videoUrl) {
+        throw {
+          kind: 'api',
+          status: 502,
+          message: 'DashScope video task succeeded but returned no video URL.',
+        } satisfies QwenCallError;
+      }
+      return { url: videoUrl, model };
+    }
+    if (status === 'FAILED' || status === 'CANCELED' || status === 'UNKNOWN') {
+      throw {
+        kind: 'api',
+        status: 502,
+        message: data?.output?.message || `DashScope video task ${status.toLowerCase()}.`,
+      } satisfies QwenCallError;
+    }
+  }
+
+  throw {
+    kind: 'api',
+    status: 504,
+    message: 'DashScope video generation timed out.',
+  } satisfies QwenCallError;
 }

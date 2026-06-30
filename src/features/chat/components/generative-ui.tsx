@@ -13,6 +13,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useProjectStore } from '@/features/project/store';
 import { useWorkflowStore } from '@/features/workflow';
+import { storage } from '@/services/storage/indexeddb';
 import type {
   StylePreset,
   TargetPlatform,
@@ -24,6 +25,8 @@ import type {
   ReusableAssetPlan,
 } from '@/core/types';
 import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '../lib/video-output-utils';
+
+const BRAND_KIT_STORAGE_KEY = 'videoforge-brandkits';
 
 export interface GenerativeUIOptions {
   /** When set, clicking a preset saves prefs and sends this as the user message. */
@@ -81,7 +84,7 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
             Creative Workflow Plan
           </span>
           <Button size="sm" className="h-7 text-xs" onClick={openWorkflow}>
-            Open Workflow →
+            Use Generated Assets in Workflow →
           </Button>
         </CardTitle>
       </CardHeader>
@@ -104,7 +107,7 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
         )}
 
         <div className="space-y-2">
-          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Workflow scenes</div>
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Generated start/end frames</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {plan.scenes.map((scene) => (
               <div key={scene.id} className="rounded-lg border border-border/50 bg-muted/20 p-3">
@@ -113,6 +116,22 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
                   <Badge variant="outline" className="text-[10px] h-4 px-1.5">{scene.duration}s</Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground line-clamp-2">{scene.sceneGoal || scene.prompt}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <FramePreview
+                    label="Start"
+                    url={scene.startFrameUrl ?? scene.generatedStartFrameUrl}
+                    status={scene.frameGenerationStatus}
+                    model={scene.frameGenerationModel}
+                    error={scene.frameGenerationError}
+                  />
+                  <FramePreview
+                    label="End"
+                    url={scene.endFrameUrl ?? scene.generatedEndFrameUrl}
+                    status={scene.frameGenerationStatus}
+                    model={scene.frameGenerationModel}
+                    error={scene.frameGenerationError}
+                  />
+                </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Badge variant="outline" className="text-[10px] h-4 px-1.5">{scene.cameraMovement.replace(/_/g, ' ')}</Badge>
                   {scene.assetsUsed?.slice(0, 2).map((assetId) => (
@@ -135,6 +154,40 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
   );
 }
 
+function FramePreview({
+  label,
+  url,
+  status,
+  model,
+  error,
+}: {
+  label: string;
+  url?: string;
+  status?: string;
+  model?: string;
+  error?: string;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border/50 bg-background/30">
+      <div className="relative aspect-[9/16]">
+        {url ? (
+          <img src={url} alt={`${label} frame`} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-muted/30 px-2 text-center text-[10px] text-muted-foreground">
+            {status === 'failed' ? `Qwen image failed${error ? `: ${error.slice(0, 80)}` : ''}` : 'Pending Qwen image generation'}
+          </div>
+        )}
+        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-white">{label}</span>
+        {model && (
+          <span className="absolute bottom-1 left-1 right-1 truncate rounded bg-black/60 px-1.5 py-0.5 text-[8px] text-white">
+            {model}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PlanLine({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -145,16 +198,82 @@ function PlanLine({ label, value }: { label: string; value: string }) {
 }
 
 function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
-  const action = (label: string) => () => {
+  const { currentProjectId } = useProjectStore();
+
+  const saveToProjectAssets = async () => {
+    if (!currentProjectId || !asset.generatedImageUrl) return;
+    await storage.saveAsset({
+      id: `${asset.id}-${Date.now()}`,
+      projectId: currentProjectId,
+      name: asset.name,
+      type: 'reference',
+      url: asset.generatedImageUrl,
+      thumbnailUrl: asset.generatedImageUrl,
+      mimeType: 'image/svg+xml',
+      size: asset.generatedImageUrl.length,
+      createdAt: new Date().toISOString(),
+      metadata: {
+        reusableAssetId: asset.id,
+        assetType: asset.type,
+        prompt: asset.referenceImagePrompt,
+        negativePrompt: asset.negativePrompt,
+        consistencyNotes: asset.consistencyNotes,
+      },
+    });
+  };
+
+  const saveToBrandIdentity = () => {
+    if (typeof window === 'undefined' || !asset.generatedImageUrl) return;
+    const raw = window.localStorage.getItem(BRAND_KIT_STORAGE_KEY);
+    const kits = raw ? JSON.parse(raw) : [];
+    const existing = kits.find((kit: { name: string }) => kit.name === 'Generated Brand Identity');
+    const nextUrlList = Array.from(new Set([...(existing?.productImageUrls ?? []), asset.generatedImageUrl]));
+    const kit = {
+      id: existing?.id ?? `brand-generated-${Date.now()}`,
+      name: 'Generated Brand Identity',
+      brandName: existing?.brandName ?? 'Generated Brand Identity',
+      colors: existing?.colors ?? [],
+      logoUrls: existing?.logoUrls ?? [],
+      fonts: existing?.fonts ?? [],
+      toneOfVoice: existing?.toneOfVoice ?? 'Warm, polished, creator-led',
+      productImageUrls: nextUrlList,
+      targetAudience: existing?.targetAudience ?? '',
+      ctaStyle: existing?.ctaStyle ?? '',
+      visualIdentity: `${existing?.visualIdentity ?? ''}\n${asset.name}: ${asset.description}`.trim(),
+      brandRules: `${existing?.brandRules ?? ''}\n${asset.consistencyNotes}`.trim(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = existing
+      ? kits.map((item: { id: string }) => item.id === kit.id ? kit : item)
+      : [...kits, kit];
+    window.localStorage.setItem(BRAND_KIT_STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const logPlaceholder = (label: string) => () => {
     console.info(`[VideoForge] ${label}: ${asset.name}`);
   };
 
   return (
     <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+      {asset.generatedImageUrl ? (
+        <div className="mb-2 overflow-hidden rounded-md border border-border/50 bg-background/30">
+          <img src={asset.generatedImageUrl} alt={asset.name} className="aspect-[9/16] w-full object-cover" />
+        </div>
+      ) : (
+        <div className="mb-2 flex aspect-[9/16] items-center justify-center rounded-md border border-border/50 bg-muted/30 px-3 text-center text-[11px] text-muted-foreground">
+          {asset.generationStatus === 'failed'
+            ? `Qwen image failed${asset.generationError ? `: ${asset.generationError.slice(0, 90)}` : ''}`
+            : 'Pending Qwen image generation'}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <div className="text-xs font-semibold line-clamp-1">{asset.name}</div>
           <div className="text-[10px] text-muted-foreground capitalize">{asset.type.replace(/_/g, ' ')}</div>
+          {asset.generationModel && (
+            <div className="text-[9px] text-muted-foreground">{asset.generationModel}</div>
+          )}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -163,15 +282,15 @@ function ReusableAssetCard({ asset }: { asset: ReusableAssetPlan }) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={action('Save to Brand Identity')}>Save to Brand Identity</DropdownMenuItem>
-            <DropdownMenuItem onClick={action('Save to Project Assets')}>Save to Project Assets</DropdownMenuItem>
+            <DropdownMenuItem onClick={saveToBrandIdentity} disabled={!asset.generatedImageUrl}>Save to Brand Identity</DropdownMenuItem>
+            <DropdownMenuItem onClick={saveToProjectAssets} disabled={!asset.generatedImageUrl}>Save to Project Assets</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={action('Rename')}>Rename</DropdownMenuItem>
-            <DropdownMenuItem onClick={action('Edit with AI')}>Edit with AI</DropdownMenuItem>
-            <DropdownMenuItem onClick={action('Regenerate')}>Regenerate</DropdownMenuItem>
-            <DropdownMenuItem onClick={action('Duplicate')}>Duplicate</DropdownMenuItem>
+            <DropdownMenuItem onClick={logPlaceholder('Rename')}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onClick={logPlaceholder('Edit with AI')}>Edit with AI</DropdownMenuItem>
+            <DropdownMenuItem onClick={logPlaceholder('Regenerate')}>Regenerate</DropdownMenuItem>
+            <DropdownMenuItem onClick={logPlaceholder('Duplicate')}>Duplicate</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={action('Delete')} className="text-red-400">Delete</DropdownMenuItem>
+            <DropdownMenuItem onClick={logPlaceholder('Delete')} className="text-red-400">Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

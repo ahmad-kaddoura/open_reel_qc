@@ -34,7 +34,7 @@ function SceneNodeComponent({ data, id }: NodeProps) {
   const inNodeLabels = useSettingsStore((s) => (s.settings.edgeLabelPlacement ?? 'in-node') === 'in-node');
 
   const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
-  const refPreview = scene.referenceImageUrls?.[0];
+  const refPreview = scene.startFrameUrl ?? scene.generatedStartFrameUrl ?? scene.referenceImageUrls?.[0];
 
   const statusColors: Record<string, string> = {
     idle: 'border-border',
@@ -81,7 +81,6 @@ function SceneNodeComponent({ data, id }: NodeProps) {
         <div className="h-[80px] bg-muted/30 relative overflow-hidden">
           {refPreview ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={refPreview} alt="Reference" className="w-full h-full object-cover opacity-80" />
               <div className="absolute bottom-1 left-1.5 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded">Ref</div>
             </>

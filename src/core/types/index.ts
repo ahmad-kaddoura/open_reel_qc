@@ -146,6 +146,9 @@ export interface Scene {
   avoid?: string;
   startFrameUrl?: string;
   endFrameUrl?: string;
+  frameGenerationStatus?: 'pending' | 'generated' | 'failed' | 'fallback';
+  frameGenerationModel?: string;
+  frameGenerationError?: string;
   sceneGoal?: string;
   motionPrompt?: string;
   startFramePrompt?: string;
@@ -233,6 +236,10 @@ export interface ReusableAssetPlan {
   type: ReusableAssetType;
   name: string;
   description: string;
+  generatedImageUrl?: string;
+  generationStatus?: 'pending' | 'generated' | 'failed' | 'fallback';
+  generationModel?: string;
+  generationError?: string;
   consistencyNotes: string;
   styleNotes?: string;
   personality?: string;
@@ -333,6 +340,17 @@ export type AgentType =
 
 export type EdgeLabelPlacement = 'on-edge' | 'in-node';
 
+export type GenerationEffort = 'low' | 'medium' | 'high';
+
+export interface GenerationModelRouting {
+  effort: GenerationEffort;
+  plannerModel: string;
+  imageModel: string;
+  frameModel: string;
+  videoModel: string;
+  directorModel: string;
+}
+
 // ============= App Settings =============
 export interface AppSettings {
   agentConfigs: Record<AgentType, AgentConfig>;
@@ -344,6 +362,7 @@ export interface AppSettings {
   defaultFps: number;
   scenePromptTemplate: string;
   edgeLabelPlacement: EdgeLabelPlacement;
+  generationModels: GenerationModelRouting;
 }
 
 export interface ExportPreset {

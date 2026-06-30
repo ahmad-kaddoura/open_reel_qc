@@ -261,7 +261,6 @@ export function WorkflowViewInner() {
                 {viewIsVideo ? (
                   <video src={viewUrl} controls autoPlay className="w-full rounded-lg bg-black" />
                 ) : (
-                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={viewUrl} alt={viewScene.title} className="w-full rounded-lg" />
                 )}
               </div>

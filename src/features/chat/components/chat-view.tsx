@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/features/project/store';
 import { useChatStore } from '@/features/chat';
 import { useWorkflowStore } from '@/features/workflow';
+import { useSettingsStore } from '@/features/settings/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,7 +24,7 @@ const QUICK_ACTIONS = [
   { label: 'AI Review', icon: Eye, prompt: 'Please review my current video plan and give me your director\'s feedback.' },
 ];
 
-type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief' | 'workflow';
+type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief' | 'assets_ready' | 'workflow';
 
 function getAssistantPhase(msg: { metadata?: Record<string, unknown> } | undefined): ChatPhase | null {
   if (!msg?.metadata) return null;
@@ -63,6 +64,7 @@ export function ChatView() {
   const { currentProjectId, getCurrentProject, updateCurrentProject, setPhase } = useProjectStore();
   const { messages, isStreaming, addMessage, setStreaming } = useChatStore();
   const { buildFromStoryboard } = useWorkflowStore();
+  const generationModels = useSettingsStore((s) => s.settings.generationModels);
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [configOpen, setConfigOpen] = useState(false);
@@ -76,6 +78,7 @@ export function ChatView() {
   const chatPhase = getAssistantPhase(lastAssistant);
   const stepMeta = getStepMeta(lastAssistant);
   const lastAssistantId = lastAssistant?.id;
+  const assetsReady = chatPhase === 'assets_ready';
   const workflowReady = chatPhase === 'workflow';
 
   useEffect(() => {
@@ -122,6 +125,7 @@ export function ChatView() {
           project: getCurrentProject(),
           referenceImageUrls: mergedRefs,
           projectId: currentProjectId,
+          generationModels,
         }),
       });
 
@@ -142,8 +146,10 @@ export function ChatView() {
                 notes: plan.summary,
               },
             });
-            buildFromStoryboard(plan.scenes);
-            shouldOpenWorkflow = true;
+            if (data.phase === 'workflow') {
+              buildFromStoryboard(plan.scenes);
+              shouldOpenWorkflow = true;
+            }
           }
           if (gui.type === 'video_brief_form' && gui.data) {
             await updateCurrentProject({ videoBrief: gui.data as VideoBrief });
@@ -192,6 +198,7 @@ export function ChatView() {
     buildFromStoryboard,
     currentProject,
     getCurrentProject,
+    generationModels,
   ]);
 
   const handlePresetSelect = useCallback(
@@ -232,6 +239,8 @@ export function ChatView() {
 
   const inputPlaceholder = workflowReady
     ? 'Refine the workflow — ask for scene, asset, prompt, or motion changes…'
+    : assetsReady
+      ? 'Adjust the assets, frames, story, or consistency before opening Workflow…'
     : 'Describe the video idea, character, product, story, or goal…';
 
   return (
@@ -274,7 +283,6 @@ export function ChatView() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {msg.attachments.map((att, i) => (
                       <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/20">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                       </div>
                     ))}
@@ -316,12 +324,14 @@ export function ChatView() {
       </ScrollArea>
 
       {/* Next steps banner after a creative workflow is ready */}
-      {workflowReady && (
+      {(assetsReady || workflowReady) && (
         <div className="px-4 pb-2 shrink-0">
           <div className="max-w-3xl mx-auto rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">Workflow ready.</span>{' '}
-              Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.
+              <span className="text-foreground font-medium">{assetsReady ? 'Assets and frames ready.' : 'Workflow ready.'}</span>{' '}
+              {assetsReady
+                ? 'Save reusable images or open Workflow when approved.'
+                : 'Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.'}
             </div>
             <div className="flex gap-2 shrink-0">
               <Button
@@ -387,7 +397,6 @@ export function ChatView() {
             <div className="flex flex-wrap gap-2">
               {pendingAttachments.map((att, i) => (
                 <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                   <button
                     type="button"

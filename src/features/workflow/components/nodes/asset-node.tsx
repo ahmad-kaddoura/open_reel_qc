@@ -7,10 +7,66 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Box, MoreHorizontal } from 'lucide-react';
+import { useProjectStore } from '@/features/project/store';
+import { storage } from '@/services/storage/indexeddb';
 import type { ReusableAssetPlan } from '@/core/types';
+
+const BRAND_KIT_STORAGE_KEY = 'videoforge-brandkits';
 
 function AssetNodeComponent({ data }: NodeProps) {
   const asset = data as unknown as ReusableAssetPlan;
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
+
+  const saveToProjectAssets = async () => {
+    if (!currentProjectId || !asset.generatedImageUrl) return;
+    await storage.saveAsset({
+      id: `${asset.id}-${Date.now()}`,
+      projectId: currentProjectId,
+      name: asset.name,
+      type: 'reference',
+      url: asset.generatedImageUrl,
+      thumbnailUrl: asset.generatedImageUrl,
+      mimeType: 'image/svg+xml',
+      size: asset.generatedImageUrl.length,
+      createdAt: new Date().toISOString(),
+      metadata: {
+        reusableAssetId: asset.id,
+        assetType: asset.type,
+        prompt: asset.referenceImagePrompt,
+        negativePrompt: asset.negativePrompt,
+        consistencyNotes: asset.consistencyNotes,
+      },
+    });
+  };
+
+  const saveToBrandIdentity = () => {
+    if (typeof window === 'undefined' || !asset.generatedImageUrl) return;
+    const raw = window.localStorage.getItem(BRAND_KIT_STORAGE_KEY);
+    const kits = raw ? JSON.parse(raw) : [];
+    const existing = kits.find((kit: { name: string }) => kit.name === 'Generated Brand Identity');
+    const productImageUrls = Array.from(new Set([...(existing?.productImageUrls ?? []), asset.generatedImageUrl]));
+    const kit = {
+      id: existing?.id ?? `brand-generated-${Date.now()}`,
+      name: 'Generated Brand Identity',
+      brandName: existing?.brandName ?? 'Generated Brand Identity',
+      colors: existing?.colors ?? [],
+      logoUrls: existing?.logoUrls ?? [],
+      fonts: existing?.fonts ?? [],
+      toneOfVoice: existing?.toneOfVoice ?? 'Warm, polished, creator-led',
+      productImageUrls,
+      targetAudience: existing?.targetAudience ?? '',
+      ctaStyle: existing?.ctaStyle ?? '',
+      visualIdentity: `${existing?.visualIdentity ?? ''}\n${asset.name}: ${asset.description}`.trim(),
+      brandRules: `${existing?.brandRules ?? ''}\n${asset.consistencyNotes}`.trim(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = existing
+      ? kits.map((item: { id: string }) => item.id === kit.id ? kit : item)
+      : [...kits, kit];
+    window.localStorage.setItem(BRAND_KIT_STORAGE_KEY, JSON.stringify(updated));
+  };
+
   const action = (label: string) => () => {
     console.info(`[VideoForge] ${label}: ${asset.name}`);
   };
@@ -30,8 +86,8 @@ function AssetNodeComponent({ data }: NodeProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={action('Save to Brand Identity')}>Save to Brand Identity</DropdownMenuItem>
-              <DropdownMenuItem onClick={action('Save to Project Assets')}>Save to Project Assets</DropdownMenuItem>
+              <DropdownMenuItem onClick={saveToBrandIdentity} disabled={!asset.generatedImageUrl}>Save to Brand Identity</DropdownMenuItem>
+              <DropdownMenuItem onClick={saveToProjectAssets} disabled={!asset.generatedImageUrl}>Save to Project Assets</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={action('Rename')}>Rename</DropdownMenuItem>
               <DropdownMenuItem onClick={action('Edit with AI')}>Edit with AI</DropdownMenuItem>
@@ -44,9 +100,23 @@ function AssetNodeComponent({ data }: NodeProps) {
         </div>
 
         <div className="p-3 space-y-2">
+          {asset.generatedImageUrl ? (
+            <div className="overflow-hidden rounded-md border border-border/50 bg-background/30">
+              <img src={asset.generatedImageUrl} alt={asset.name} className="aspect-[9/16] w-full object-cover" />
+            </div>
+          ) : (
+            <div className="flex aspect-[9/16] items-center justify-center rounded-md border border-border/50 bg-muted/30 px-3 text-center text-[10px] text-muted-foreground">
+              {asset.generationStatus === 'failed'
+                ? `Qwen image failed${asset.generationError ? `: ${asset.generationError.slice(0, 80)}` : ''}`
+                : 'Pending Qwen image generation'}
+            </div>
+          )}
           <div>
             <h3 className="text-xs font-semibold leading-tight">{asset.name}</h3>
             <p className="mt-1 text-[10px] text-muted-foreground line-clamp-2">{asset.description}</p>
+            {asset.generationModel && (
+              <p className="mt-1 text-[9px] text-muted-foreground">{asset.generationModel}</p>
+            )}
           </div>
           <div className="flex flex-wrap gap-1">
             {asset.saveTargets.map((target) => (

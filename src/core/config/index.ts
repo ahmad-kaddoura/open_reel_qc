@@ -98,12 +98,45 @@ interface ExportPresetConfig extends ExportPreset {
 }
 
 export const QWEN_MODELS = [
-  { id: 'qwen-max', name: 'Qwen Max', description: 'Most capable model', maxTokens: 32768 },
-  { id: 'qwen-plus', name: 'Qwen Plus', description: 'Balanced performance', maxTokens: 32768 },
-  { id: 'qwen-turbo', name: 'Qwen Turbo', description: 'Fast and efficient', maxTokens: 8192 },
-  { id: 'qwen-vl-max', name: 'Qwen VL Max', description: 'Best vision understanding', maxTokens: 8192 },
-  { id: 'qwen-vl-plus', name: 'Qwen VL Plus', description: 'Good vision understanding', maxTokens: 8192 },
+  { id: 'qwen-max', name: 'Qwen Max', description: 'Best planning/director reasoning', maxTokens: 32768, task: 'text' },
+  { id: 'qwen-plus', name: 'Qwen Plus', description: 'Reliable balanced planning', maxTokens: 32768, task: 'text' },
+  { id: 'qwen-turbo', name: 'Qwen Turbo', description: 'Fast low-cost planning', maxTokens: 8192, task: 'text' },
+  { id: 'qwen-vl-max', name: 'Qwen VL Max', description: 'Best visual understanding/review', maxTokens: 8192, task: 'vision' },
+  { id: 'qwen-vl-plus', name: 'Qwen VL Plus', description: 'Balanced visual understanding', maxTokens: 8192, task: 'vision' },
+  { id: 'qwen-image-plus', name: 'Qwen Image Plus', description: 'Best image generation and prompt adherence', maxTokens: 0, task: 'image' },
+  { id: 'qwen-image', name: 'Qwen Image', description: 'Balanced image generation', maxTokens: 0, task: 'image' },
+  { id: 'wan2.1-i2v-plus', name: 'Wan 2.1 I2V Plus', description: 'Best image-to-video generation', maxTokens: 0, task: 'video' },
+  { id: 'wan2.1-i2v-turbo', name: 'Wan 2.1 I2V Turbo', description: 'Faster image-to-video generation', maxTokens: 0, task: 'video' },
 ] as const;
+
+export const GENERATION_MODEL_PRESETS = {
+  low: {
+    effort: 'low' as const,
+    plannerModel: 'qwen-turbo',
+    imageModel: 'qwen-image',
+    frameModel: 'qwen-image',
+    videoModel: 'wan2.1-i2v-turbo',
+    directorModel: 'qwen-vl-plus',
+  },
+  medium: {
+    effort: 'medium' as const,
+    plannerModel: 'qwen-plus',
+    imageModel: 'qwen-image',
+    frameModel: 'qwen-image',
+    videoModel: 'wan2.1-i2v-turbo',
+    directorModel: 'qwen-vl-max',
+  },
+  high: {
+    effort: 'high' as const,
+    plannerModel: 'qwen-max',
+    imageModel: 'qwen-image-plus',
+    frameModel: 'qwen-image-plus',
+    videoModel: 'wan2.1-i2v-plus',
+    directorModel: 'qwen-vl-max',
+  },
+};
+
+export const DEFAULT_GENERATION_MODELS = GENERATION_MODEL_PRESETS.high;
 
 export const DEFAULT_AGENT_CONFIGS = {
   chat_planner: {

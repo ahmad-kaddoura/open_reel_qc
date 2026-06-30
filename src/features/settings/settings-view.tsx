@@ -42,6 +42,7 @@ export function SettingsView() {
   const setScenePromptTemplate = useSettingsStore((s) => s.setScenePromptTemplate);
   const resetScenePromptTemplate = useSettingsStore((s) => s.resetScenePromptTemplate);
   const setEdgeLabelPlacement = useSettingsStore((s) => s.setEdgeLabelPlacement);
+  const setGenerationEffort = useSettingsStore((s) => s.setGenerationEffort);
 
   return (
     <ScrollArea className="h-full">
@@ -136,6 +137,36 @@ export function SettingsView() {
 
           {/* Agents Tab */}
           <TabsContent value="agents" className="space-y-3">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Generation Model Routing</CardTitle>
+                <CardDescription className="text-xs">
+                  Fixed task-specific Qwen routing for reliable output. Change effort, not individual model IDs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="max-w-xs">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Effort</Label>
+                  <Select value={settings.generationModels.effort} onValueChange={(v) => setGenerationEffort(v as typeof settings.generationModels.effort)}>
+                    <SelectTrigger className="mt-1 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High — best quality</SelectItem>
+                      <SelectItem value="medium">Medium — balanced</SelectItem>
+                      <SelectItem value="low">Low — faster/lower cost</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                  <RouteModel label="Planning" value={settings.generationModels.plannerModel} />
+                  <RouteModel label="Images" value={settings.generationModels.imageModel} />
+                  <RouteModel label="Frames" value={settings.generationModels.frameModel} />
+                  <RouteModel label="Video" value={settings.generationModels.videoModel} />
+                  <RouteModel label="Review" value={settings.generationModels.directorModel} />
+                </div>
+              </CardContent>
+            </Card>
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">Configure which AI model each agent uses. Select the Qwen Cloud model that best fits each task.</p>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
@@ -398,5 +429,14 @@ export function SettingsView() {
         </Tabs>
       </div>
     </ScrollArea>
+  );
+}
+
+function RouteModel({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-card/60 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 font-medium">{value}</div>
+    </div>
   );
 }

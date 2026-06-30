@@ -1,4 +1,4 @@
-import type { Scene } from '@/core/types';
+import type { GenerationModelRouting, Scene } from '@/core/types';
 
 // Small public-domain sample clips so the node can actually play a video
 // while the real generation API isn't wired up yet.
@@ -26,22 +26,60 @@ function placeholderFrameUrl(title: string, order: number): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Mock generation until real image/video APIs are wired. */
 export async function generateSceneAssets(
   scene: Scene,
   onProgress: (pct: number) => void,
-): Promise<{ startFrameUrl: string; videoUrl: string }> {
-  const milestones = [8, 22, 38, 55, 72, 88, 100];
-  for (const pct of milestones) {
+  options?: {
+    prompt?: string;
+    generationModels?: GenerationModelRouting;
+  },
+): Promise<{ startFrameUrl: string; endFrameUrl: string; videoUrl: string }> {
+  const startFrameUrl =
+    scene.startFrameUrl ??
+    scene.generatedStartFrameUrl ??
+    scene.referenceImageUrls?.[0] ??
+    placeholderFrameUrl(scene.title, scene.order);
+  const endFrameUrl =
+    scene.endFrameUrl ??
+    scene.generatedEndFrameUrl ??
+    placeholderFrameUrl(`${scene.title} End`, scene.order);
+
+  for (const pct of [8, 18, 30]) {
     await new Promise((r) => setTimeout(r, 350 + Math.random() * 250));
     onProgress(pct);
   }
 
-  const startFrameUrl =
-    scene.startFrameUrl ??
-    scene.referenceImageUrls?.[0] ??
-    placeholderFrameUrl(scene.title, scene.order);
+  try {
+    const response = await fetch('/api/generate-scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: options?.prompt || scene.motionPrompt || scene.prompt,
+        startFrameUrl,
+        endFrameUrl,
+        generationModels: options?.generationModels,
+      }),
+    });
+
+    onProgress(72);
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const data = await response.json();
+    onProgress(100);
+    return { startFrameUrl, endFrameUrl, videoUrl: data.videoUrl };
+  } catch (error) {
+    console.warn('Qwen video generation failed, using local preview clip.', error);
+  }
+
+  for (const pct of [55, 72, 88, 100]) {
+    await new Promise((r) => setTimeout(r, 350 + Math.random() * 250));
+    onProgress(pct);
+  }
+
   const videoUrl = SAMPLE_CLIPS[scene.order % SAMPLE_CLIPS.length];
 
-  return { startFrameUrl, videoUrl };
+  return { startFrameUrl, endFrameUrl, videoUrl };
 }

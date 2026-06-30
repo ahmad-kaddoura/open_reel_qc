@@ -135,6 +135,7 @@ function inferAssetNeeds(concept: string): ReusableAssetPlan[] {
       type: 'influencer',
       name: 'Influencer Character Asset',
       description: 'Consistent female beauty creator used as the hero subject across every scene.',
+      generationStatus: 'pending',
       consistencyNotes: 'Keep the same face shape, skin tone, hair length, facial features, and approachable creator energy in all frames.',
       styleNotes: 'Clean beauty lighting, polished but realistic makeup, modern neutral outfit, premium social-video framing.',
       personality: 'Confident, warm, tutorial-friendly, aspirational without feeling staged.',
@@ -151,6 +152,7 @@ function inferAssetNeeds(concept: string): ReusableAssetPlan[] {
       type: 'product',
       name: 'Makeup Product Asset',
       description: 'Reusable hero cosmetic product or compact brand item for application and final product shot scenes.',
+      generationStatus: 'pending',
       consistencyNotes: 'Keep packaging shape, cap color, label placement, and product color consistent.',
       styleNotes: 'Minimal premium beauty packaging with clean readable silhouette; avoid inventing real brand logos.',
       referenceImagePrompt: `Premium makeup product reference for ${concept}, elegant cosmetic packaging, clean label area, soft reflective surface, beauty campaign lighting, high detail`,
@@ -207,6 +209,7 @@ function scene(
     avoid: 'warped hands, inconsistent face, random logos, unreadable labels, flickering makeup continuity',
     startFramePrompt,
     endFramePrompt,
+    frameGenerationStatus: 'pending',
     motionPrompt: `Animate ${action.toLowerCase()} with controlled creator-style movement, stable facial identity, natural hand motion, and no sudden camera jumps.`,
     negativePrompt: 'distorted hands, face changes, melted packaging, extra fingers, jump cuts, duplicated products, text artifacts',
     narration: index === 1

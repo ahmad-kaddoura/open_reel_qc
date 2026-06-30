@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, Scene } from '@/core/types';
-import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE } from '@/core/config';
+import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene } from '@/core/types';
+import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, DEFAULT_GENERATION_MODELS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE, GENERATION_MODEL_PRESETS } from '@/core/config';
 
 interface SettingsState {
   settings: AppSettings;
@@ -28,6 +28,7 @@ interface SettingsState {
   setScenePromptTemplate: (template: string) => void;
   resetScenePromptTemplate: () => void;
   setEdgeLabelPlacement: (placement: AppSettings['edgeLabelPlacement']) => void;
+  setGenerationEffort: (effort: GenerationEffort) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -40,6 +41,7 @@ const defaultSettings: AppSettings = {
   defaultFps: 30,
   scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
   edgeLabelPlacement: 'in-node',
+  generationModels: DEFAULT_GENERATION_MODELS,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -121,6 +123,12 @@ export const useSettingsStore = create<SettingsState>()(
       setEdgeLabelPlacement: (placement) => {
         set((s) => { s.settings.edgeLabelPlacement = placement; });
       },
+
+      setGenerationEffort: (effort) => {
+        set((s) => {
+          s.settings.generationModels = GENERATION_MODEL_PRESETS[effort];
+        });
+      },
     })),
     {
       name: 'videoforge-settings',
@@ -140,6 +148,10 @@ export const useSettingsStore = create<SettingsState>()(
             costControls: {
               ...current.settings.costControls,
               ...p?.settings?.costControls,
+            },
+            generationModels: {
+              ...current.settings.generationModels,
+              ...p?.settings?.generationModels,
             },
           },
         };

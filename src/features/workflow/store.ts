@@ -305,13 +305,20 @@ export const useWorkflowStore = create<WorkflowState>()(
       });
 
       try {
-        const result = await generateSceneAssets(scene, (pct) => {
-          set((s) => {
-            if (s.sceneMap[id]) {
-              s.sceneMap[id].generationProgress = pct;
-            }
-          });
-        });
+        const result = await generateSceneAssets(
+          scene,
+          (pct) => {
+            set((s) => {
+              if (s.sceneMap[id]) {
+                s.sceneMap[id].generationProgress = pct;
+              }
+            });
+          },
+          {
+            prompt: builtPrompt,
+            generationModels: useSettingsStore.getState().settings.generationModels,
+          },
+        );
 
         const versionId = nanoid();
         set((s) => {
@@ -320,6 +327,9 @@ export const useWorkflowStore = create<WorkflowState>()(
           sc.status = 'completed';
           sc.generationProgress = 100;
           sc.generatedStartFrameUrl = result.startFrameUrl;
+          sc.generatedEndFrameUrl = result.endFrameUrl;
+          sc.startFrameUrl = result.startFrameUrl;
+          sc.endFrameUrl = result.endFrameUrl;
           if (result.videoUrl) sc.generatedVideoUrl = result.videoUrl;
           sc.versions.push({
             id: versionId,

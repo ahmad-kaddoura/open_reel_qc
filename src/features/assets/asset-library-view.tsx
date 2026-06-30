@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { FolderOpen, Image, Video, Music, FileText, Upload, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Asset } from '@/core/types';
+import { storage } from '@/services/storage/indexeddb';
 
 const MOCK_ASSETS: Asset[] = [
   { id: '1', projectId: '', name: 'product-hero.jpg', type: 'image', url: '#', mimeType: 'image/jpeg', size: 2400000, createdAt: new Date().toISOString(), metadata: { width: 1920, height: 1080 } },
@@ -34,8 +35,15 @@ export function AssetLibraryView() {
   const { currentProjectId } = useProjectStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('all');
+  const [savedAssets, setSavedAssets] = useState<Asset[]>([]);
 
-  const assets = MOCK_ASSETS.filter(a =>
+  useEffect(() => {
+    if (!currentProjectId) return;
+    storage.getAssets(currentProjectId).then((items) => setSavedAssets(items as Asset[]));
+  }, [currentProjectId]);
+
+  const sourceAssets = currentProjectId && savedAssets.length > 0 ? savedAssets : MOCK_ASSETS;
+  const assets = sourceAssets.filter(a =>
     (filter === 'all' || a.type === filter) &&
     a.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -89,9 +97,13 @@ export function AssetLibraryView() {
                 return (
                   <Card key={asset.id} className="group hover:border-primary/30 transition-colors cursor-pointer overflow-hidden">
                     <div className="h-[120px] bg-muted/30 flex items-center justify-center relative">
-                      <div className={`w-12 h-12 rounded-xl ${config.color} flex items-center justify-center`}>
-                        <config.icon className="w-6 h-6" />
-                      </div>
+                      {asset.url && asset.url !== '#' && asset.type !== 'audio' && asset.type !== 'video' ? (
+                        <img src={asset.thumbnailUrl || asset.url} alt={asset.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className={`w-12 h-12 rounded-xl ${config.color} flex items-center justify-center`}>
+                          <config.icon className="w-6 h-6" />
+                        </div>
+                      )}
                       <div className="absolute top-2 right-2">
                         <Badge variant="secondary" className="text-[9px] h-4">{config.label}</Badge>
                       </div>
