@@ -13,8 +13,8 @@ import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sun, Moon, Monitor, Bot, Download, Shield, RotateCcw, KeyRound } from 'lucide-react';
-import { QWEN_MODELS, DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS } from '@/core/config';
+import { Sun, Moon, Monitor, Bot, Download, Shield, RotateCcw, KeyRound, FileText } from 'lucide-react';
+import { QWEN_MODELS, DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE, PROMPT_TEMPLATE_VARIABLES } from '@/core/config';
 import { ApiKeysSection } from '@/features/settings/api-keys-section';
 import type { AgentType } from '@/core/types';
 
@@ -34,7 +34,7 @@ const AGENT_INFO: { type: AgentType; icon: string; category: string }[] = [
 ];
 
 export function SettingsView() {
-  const { settings, getAgentConfig, updateAgentConfig, updateCostControls, setTheme } = useSettingsStore();
+  const { settings, getAgentConfig, updateAgentConfig, updateCostControls, setTheme, setScenePromptTemplate, resetScenePromptTemplate } = useSettingsStore();
 
   return (
     <ScrollArea className="h-full">
@@ -45,9 +45,12 @@ export function SettingsView() {
         </div>
 
         <Tabs defaultValue="api-keys" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="api-keys" className="gap-1.5 text-xs">
               <KeyRound className="w-3.5 h-3.5" /> API Keys
+            </TabsTrigger>
+            <TabsTrigger value="prompts" className="gap-1.5 text-xs">
+              <FileText className="w-3.5 h-3.5" /> Prompts
             </TabsTrigger>
             <TabsTrigger value="agents" className="gap-1.5 text-xs">
               <Bot className="w-3.5 h-3.5" /> Agents
@@ -66,6 +69,62 @@ export function SettingsView() {
           {/* API Keys Tab */}
           <TabsContent value="api-keys">
             <ApiKeysSection />
+          </TabsContent>
+
+          {/* Prompts Tab */}
+          <TabsContent value="prompts" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Scene prompt template — each scene fills this with its parameters and section values.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => resetScenePromptTemplate()}
+              >
+                <RotateCcw className="w-3 h-3" /> Reset
+              </Button>
+            </div>
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {PROMPT_TEMPLATE_VARIABLES.map((v) => (
+                    <button
+                      key={v.token}
+                      onClick={() => {
+                        const ta = document.getElementById('prompt-template-textarea') as HTMLTextAreaElement | null;
+                        if (ta) {
+                          const start = ta.selectionStart;
+                          const end = ta.selectionEnd;
+                          const next = settings.scenePromptTemplate.slice(0, start) + v.token + settings.scenePromptTemplate.slice(end);
+                          setScenePromptTemplate(next);
+                          requestAnimationFrame(() => {
+                            ta.focus();
+                            ta.selectionStart = ta.selectionEnd = start + v.token.length;
+                          });
+                        } else {
+                          setScenePromptTemplate(settings.scenePromptTemplate + v.token);
+                        }
+                      }}
+                      className="text-[10px] px-2 py-1 rounded border border-border hover:border-primary/40 hover:bg-primary/5 text-muted-foreground transition-colors"
+                      title={v.label}
+                    >
+                      {v.token}
+                    </button>
+                  ))}
+                </div>
+                <Textarea
+                  id="prompt-template-textarea"
+                  className="font-mono text-xs min-h-[280px]"
+                  value={settings.scenePromptTemplate}
+                  onChange={(e) => setScenePromptTemplate(e.target.value)}
+                />
+                <div className="text-[10px] text-muted-foreground">
+                  Variables are replaced per scene. Empty sections render as blank lines.
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Agents Tab */}

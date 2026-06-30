@@ -120,3 +120,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* React Flow nodes — remove default white wrapper */
+.workflow-canvas .react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.workflow-canvas .react-flow__node.selected {
+  box-shadow: none !important;
+}

@@ -5,9 +5,32 @@ import { applyNodeChanges, applyEdgeChanges, type OnNodesChange, type OnEdgesCha
 import type { Scene, SceneStatus } from '@/core/types';
 import { useProjectStore } from '@/features/project/store';
 
+import { generateSceneAssets } from './generate-scene';
+import { buildScenePrompt } from './prompt-template';
+import { useSettingsStore } from '@/features/settings/store';
+import {
+  computeAutoLayout,
+  loadLayoutFromStorage,
+  saveLayoutToStorage,
+} from './workflow-layout';
+
+function persistStoryboard(get: () => WorkflowState) {
+  const project = useProjectStore.getState().getCurrentProject();
+  if (!project) return;
+  const scenes = get().getScenes();
+  useProjectStore.getState().setStoryboard({
+    id: project.storyboard?.id || nanoid(),
+    scenes,
+    totalDuration: get().getTotalDuration(),
+    narrativeArc: project.storyboard?.narrativeArc || '',
+  });
+}
+
 interface WorkflowState {
   sceneMap: Record<string, Scene>;
   sceneOrder: string[];
+  nodePositions: Record<string, { x: number; y: number }>;
+  layoutProjectId: string | null;
 
   // Scene CRUD
   addScene: (afterIndex?: number) => void;
@@ -18,6 +41,11 @@ interface WorkflowState {
 
   // Scene status
   setSceneStatus: (id: string, status: SceneStatus) => void;
+  generateScene: (id: string) => Promise<void>;
+  generateAllScenes: () => Promise<void>;
+  clearSceneOutput: (id: string) => void;
+  retrySceneGeneration: (id: string) => Promise<void>;
+  isGeneratingAll: boolean;
 
   // AI actions on scenes
   updateScenePrompt: (id: string, newPrompt: string) => void;
@@ -27,12 +55,21 @@ interface WorkflowState {
   getScenes: () => Scene[];
   getTotalDuration: () => number;
   buildFromStoryboard: (scenes: Scene[]) => void;
+
+  // Layout
+  loadLayoutForProject: (projectId: string) => void;
+  setNodePosition: (nodeId: string, position: { x: number; y: number }) => void;
+  applyAutoLayout: () => void;
+  getNodePositions: () => Record<string, { x: number; y: number }>;
 }
 
 export const useWorkflowStore = create<WorkflowState>()(
   immer((set, get) => ({
     sceneMap: {},
     sceneOrder: [],
+    nodePositions: {},
+    layoutProjectId: null,
+    isGeneratingAll: false,
 
     addScene: (afterIndex) => {
       const id = nanoid();
@@ -56,8 +93,16 @@ export const useWorkflowStore = create<WorkflowState>()(
         transition: 'cut',
         textOverlays: [],
         stylePreset: 'cinematic',
+        referenceImageUrls: [],
         status: 'idle',
         versions: [],
+        aspectRatio: '9:16',
+        sceneDescription: '',
+        actionDescription: '',
+        visualStyle: '',
+        lighting: '',
+        details: '',
+        avoid: '',
       };
 
       set((s) => {
@@ -183,6 +228,101 @@ export const useWorkflowStore = create<WorkflowState>()(
       });
     },
 
+    generateScene: async (id) => {
+      const scene = get().sceneMap[id];
+      if (!scene) return;
+      if (scene.status === 'generating' || scene.status === 'regenerating' || scene.status === 'queued') return;
+
+      const template = useSettingsStore.getState().settings.scenePromptTemplate;
+      const builtPrompt = buildScenePrompt(scene, template);
+
+      set((s) => {
+        if (s.sceneMap[id]) {
+          s.sceneMap[id].status = 'generating';
+          s.sceneMap[id].generationProgress = 0;
+          s.sceneMap[id].enhancedPrompt = builtPrompt;
+        }
+      });
+
+      try {
+        const result = await generateSceneAssets(scene, (pct) => {
+          set((s) => {
+            if (s.sceneMap[id]) {
+              s.sceneMap[id].generationProgress = pct;
+            }
+          });
+        });
+
+        const versionId = nanoid();
+        set((s) => {
+          if (!s.sceneMap[id]) return;
+          const sc = s.sceneMap[id];
+          sc.status = 'completed';
+          sc.generationProgress = 100;
+          sc.generatedStartFrameUrl = result.startFrameUrl;
+          if (result.videoUrl) sc.generatedVideoUrl = result.videoUrl;
+          sc.versions.push({
+            id: versionId,
+            sceneId: id,
+            prompt: sc.prompt,
+            generatedImageUrl: result.startFrameUrl,
+            generatedVideoUrl: result.videoUrl,
+            createdAt: new Date().toISOString(),
+          });
+        });
+        persistStoryboard(get);
+      } catch {
+        set((s) => {
+          if (s.sceneMap[id]) {
+            s.sceneMap[id].status = 'failed';
+            s.sceneMap[id].generationProgress = 0;
+          }
+        });
+      }
+    },
+
+    generateAllScenes: async () => {
+      if (get().isGeneratingAll) return;
+      set((s) => { s.isGeneratingAll = true; });
+
+      const pending = get().getScenes().filter(
+        (sc) => sc.status === 'idle' || sc.status === 'failed' || sc.status === 'queued',
+      );
+
+      for (const sc of pending) {
+        set((s) => {
+          if (s.sceneMap[sc.id]) s.sceneMap[sc.id].status = 'queued';
+        });
+      }
+
+      for (const sc of pending) {
+        await get().generateScene(sc.id);
+      }
+
+      set((s) => { s.isGeneratingAll = false; });
+    },
+
+    clearSceneOutput: (id) => {
+      set((s) => {
+        if (!s.sceneMap[id]) return;
+        const sc = s.sceneMap[id];
+        sc.status = 'idle';
+        sc.generationProgress = undefined;
+        sc.generatedStartFrameUrl = undefined;
+        sc.generatedEndFrameUrl = undefined;
+        sc.generatedVideoUrl = undefined;
+        sc.generatedAudioUrl = undefined;
+      });
+      persistStoryboard(get);
+    },
+
+    retrySceneGeneration: async (id) => {
+      const scene = get().sceneMap[id];
+      if (!scene) return;
+      if (scene.status === 'generating' || scene.status === 'queued') return;
+      await get().generateScene(id);
+    },
+
     updateScenePrompt: (id, newPrompt) => {
       set((s) => {
         if (s.sceneMap[id]) {
@@ -207,5 +347,37 @@ export const useWorkflowStore = create<WorkflowState>()(
         });
       });
     },
+
+    loadLayoutForProject: (projectId) => {
+      const saved = loadLayoutFromStorage(projectId);
+      set((s) => {
+        s.layoutProjectId = projectId;
+        s.nodePositions = saved ?? {};
+      });
+    },
+
+    setNodePosition: (nodeId, position) => {
+      set((s) => {
+        s.nodePositions[nodeId] = position;
+      });
+      const projectId = get().layoutProjectId;
+      if (projectId) {
+        saveLayoutToStorage(projectId, get().nodePositions);
+      }
+    },
+
+    applyAutoLayout: () => {
+      const scenes = get().getScenes();
+      const positions = computeAutoLayout(scenes);
+      set((s) => {
+        s.nodePositions = positions;
+      });
+      const projectId = get().layoutProjectId;
+      if (projectId) {
+        saveLayoutToStorage(projectId, positions);
+      }
+    },
+
+    getNodePositions: () => get().nodePositions,
   }))
 );

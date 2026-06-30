@@ -131,10 +131,18 @@ export interface Scene {
   stylePreset: StylePreset;
   voiceover?: string;
   status: SceneStatus;
+  generationProgress?: number;
   versions: SceneVersion[];
   costEstimate?: number;
   cta?: string;
   platformNotes?: string;
+  aspectRatio?: string;
+  sceneDescription?: string;
+  actionDescription?: string;
+  visualStyle?: string;
+  lighting?: string;
+  details?: string;
+  avoid?: string;
 }
 
 export type SceneStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed' | 'cancelled' | 'regenerating';
@@ -293,6 +301,7 @@ export interface AppSettings {
   defaultAspectRatio: AspectRatio;
   defaultPlatform: TargetPlatform;
   defaultFps: number;
+  scenePromptTemplate: string;
 }
 
 export interface ExportPreset {

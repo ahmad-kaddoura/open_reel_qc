@@ -236,3 +236,38 @@ export const DEFAULT_COST_CONTROLS = {
   maxScenes: 20,
   maxVersions: 5,
 };
+
+export const DEFAULT_SCENE_PROMPT_TEMPLATE = `Create a {{duration}} video in {{aspectRatio}}.
+
+Scene:
+{{sceneDescription}}
+
+Action:
+{{actionDescription}}
+
+Camera:
+{{cameraMovement}}
+
+Visual style:
+{{visualStyle}}
+
+Lighting:
+{{lighting}}
+
+Details:
+{{details}}
+
+Avoid:
+{{avoid}}`;
+
+export const PROMPT_TEMPLATE_VARIABLES = [
+  { token: '{{duration}}', label: 'Duration (e.g. 7s)' },
+  { token: '{{aspectRatio}}', label: 'Aspect ratio (e.g. 9:16)' },
+  { token: '{{sceneDescription}}', label: 'Scene — subject, location, mood' },
+  { token: '{{actionDescription}}', label: 'Action — movement / change' },
+  { token: '{{cameraMovement}}', label: 'Camera movement' },
+  { token: '{{visualStyle}}', label: 'Visual style' },
+  { token: '{{lighting}}', label: 'Lighting' },
+  { token: '{{details}}', label: 'Details — textures, colors, atmosphere' },
+  { token: '{{avoid}}', label: 'Avoid — negative prompts' },
+] as const;

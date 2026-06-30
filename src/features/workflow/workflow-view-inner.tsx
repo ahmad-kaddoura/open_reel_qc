@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useEffect, useState } from 'react';
+import { useCallback, useMemo, useEffect, useState, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -10,21 +10,24 @@ import {
   useNodesState,
   useEdgesState,
   type Connection,
-  type Node,
-  type Edge,
   type NodeTypes,
+  type ReactFlowInstance,
+  type Node,
   BackgroundVariant,
   Panel,
-  MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useWorkflowStore } from '@/features/workflow/store';
 import { useProjectStore } from '@/features/project/store';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Plus, Play, LayoutGrid, Sparkles, Film, Camera, Eye, Zap, Wand2 } from 'lucide-react';
-import type { Scene } from '@/core/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { Plus, Play, LayoutGrid, Loader2, Sparkles, Film, Camera, Eye, Zap, Wand2, AlignHorizontalSpaceAround } from 'lucide-react';
 import { SceneNode } from './scene-node';
+import { OutputNode } from './output-node';
+import { ParamsNode } from './params-node';
+import { ScriptNode } from './script-node';
+import { buildWorkflowGraph } from './workflow-graph';
 
 const AI_ACTIONS = [
   { label: 'Improve Prompt', icon: Sparkles, prompt: 'improve' },
@@ -37,51 +40,68 @@ const AI_ACTIONS = [
 
 const nodeTypes: NodeTypes = {
   scene: SceneNode,
+  output: OutputNode,
+  params: ParamsNode,
+  script: ScriptNode,
 };
 
 export function WorkflowViewInner() {
-  const { getScenes, addScene, updateScene, setSceneStatus, getTotalDuration } = useWorkflowStore();
-  const { setPhase } = useProjectStore();
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const sceneMap = useWorkflowStore((s) => s.sceneMap);
+  const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
+  const nodePositions = useWorkflowStore((s) => s.nodePositions);
+  const addScene = useWorkflowStore((s) => s.addScene);
+  const updateScene = useWorkflowStore((s) => s.updateScene);
+  const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
+  const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
+  const getTotalDuration = useWorkflowStore((s) => s.getTotalDuration);
+  const setNodePosition = useWorkflowStore((s) => s.setNodePosition);
+  const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
+  const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
+  const { setPhase, currentProjectId } = useProjectStore();
+  const [, setSelectedNode] = useState<string | null>(null);
+  const [outputViewSceneId, setOutputViewSceneId] = useState<string | null>(null);
+  const rfRef = useRef<ReactFlowInstance | null>(null);
 
-  const scenes = getScenes();
+  const scenes = useMemo(
+    () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
+    [sceneMap, sceneOrder],
+  );
 
-  const initialNodes: Node[] = useMemo(() => {
-    const spacing = 320;
-    return scenes.map((scene, idx) => ({
-      id: scene.id,
-      type: 'scene' as const,
-      position: { x: 100 + idx * spacing, y: 200 + (idx % 2 === 0 ? 0 : 80) },
-      data: scene,
-    }));
-  }, [scenes]);
+  useEffect(() => {
+    if (currentProjectId) loadLayoutForProject(currentProjectId);
+  }, [currentProjectId, loadLayoutForProject]);
 
-  const initialEdges: Edge[] = useMemo(() => {
-    return scenes.slice(0, -1).map((scene, idx) => ({
-      id: `e-${scene.id}-${scenes[idx + 1]?.id}`,
-      source: scene.id,
-      target: scenes[idx + 1]?.id || '',
-      type: 'smoothstep',
-      animated: true,
-      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
-      label: scene.transition ? `${scene.transition.replace(/_/g, ' ')}` : undefined,
-      labelStyle: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
-      labelBgStyle: { fill: 'hsl(var(--card))', fillOpacity: 0.9 },
-      labelBgPadding: [4, 6] as [number, number],
-      labelBgBorderRadius: 4,
-    }));
-  }, [scenes]);
+  useEffect(() => {
+    (window as any).__openOutputView = (sceneId: string) => setOutputViewSceneId(sceneId);
+    return () => { delete (window as any).__openOutputView; };
+  }, []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const graphKey = useMemo(
+    () => scenes.map((s) =>
+      `${s.id}:${s.status}:${s.generatedVideoUrl ?? ''}:${s.title}:${s.duration}`,
+    ).join('|'),
+    [scenes],
+  );
+
+  const { nodes: graphNodes, edges: graphEdges } = useMemo(
+    () => buildWorkflowGraph(scenes, nodePositions),
+    [graphKey, nodePositions, scenes],
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graphEdges);
+
+  useEffect(() => {
+    setNodes(graphNodes);
+    setEdges(graphEdges);
+  }, [graphNodes, graphEdges, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    [setEdges],
   );
 
-  const handleNodeDataChange = useCallback((nodeId: string, newData: Partial<Scene>) => {
+  const handleNodeDataChange = useCallback((nodeId: string, newData: Partial<import('@/core/types').Scene>) => {
     updateScene(nodeId, newData);
   }, [updateScene]);
 
@@ -89,6 +109,22 @@ export function WorkflowViewInner() {
     (window as any).__sceneNodeUpdate = handleNodeDataChange;
     return () => { delete (window as any).__sceneNodeUpdate; };
   }, [handleNodeDataChange]);
+
+  const onNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
+    setNodePosition(node.id, node.position);
+  }, [setNodePosition]);
+
+  const handleAutoLayout = useCallback(() => {
+    applyAutoLayout();
+    setTimeout(() => rfRef.current?.fitView({ padding: 0.3, duration: 300 }), 80);
+  }, [applyAutoLayout]);
+
+  const viewScene = outputViewSceneId ? sceneMap[outputViewSceneId] : null;
+  const viewUrl = viewScene?.generatedVideoUrl ?? viewScene?.generatedStartFrameUrl;
+  const viewIsVideo = Boolean(viewScene?.generatedVideoUrl);
+
+  const generatingCount = scenes.filter((s) => s.status === 'generating' || s.status === 'regenerating' || s.status === 'queued').length;
+  const completedCount = scenes.filter((s) => s.status === 'completed').length;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -99,21 +135,28 @@ export function WorkflowViewInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
+          onInit={(inst) => { rfRef.current = inst; }}
           onNodeClick={(_, node) => setSelectedNode(node.id)}
           onPaneClick={() => setSelectedNode(null)}
           fitView
           fitViewOptions={{ padding: 0.3 }}
-          minZoom={0.2}
+          minZoom={0.1}
           maxZoom={2}
-          className="bg-background"
+          className="bg-background workflow-canvas"
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--border))" />
           <Controls className="!bg-card !border-border !shadow-lg [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground [&>button:hover]:!bg-muted" />
           <MiniMap
             nodeStrokeColor="hsl(var(--primary))"
-            nodeColor="hsl(var(--primary))"
+            nodeColor={(node) => {
+              if (node.type === 'output') return 'hsl(142 71% 45%)';
+              if (node.type === 'params') return 'hsl(45 93% 47%)';
+              if (node.type === 'script') return 'hsl(270 60% 60%)';
+              return 'hsl(var(--primary))';
+            }}
             nodeBorderRadius={8}
             className="!bg-card !border-border"
           />
@@ -121,6 +164,9 @@ export function WorkflowViewInner() {
           <Panel position="top-left" className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => addScene()} className="gap-1.5 shadow-lg bg-card border-border">
               <Plus className="w-3.5 h-3.5" /> Add Scene
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleAutoLayout} className="gap-1.5 shadow-lg bg-card border-border">
+              <AlignHorizontalSpaceAround className="w-3.5 h-3.5" /> Auto Layout
             </Button>
             <Button variant="outline" size="sm" onClick={() => setPhase('timeline')} className="gap-1.5 shadow-lg bg-card border-border">
               <LayoutGrid className="w-3.5 h-3.5" /> Timeline
@@ -137,20 +183,55 @@ export function WorkflowViewInner() {
                 <span>Total Duration</span><span className="text-foreground">{getTotalDuration()}s</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <span>Completed</span><span className="text-foreground">{scenes.filter(s => s.status === 'completed').length}</span>
+                <span>Completed</span><span className="text-foreground">{completedCount}</span>
               </div>
+              {generatingCount > 0 && (
+                <div className="flex justify-between text-blue-400">
+                  <span>Generating</span><span>{generatingCount}</span>
+                </div>
+              )}
             </div>
           </Panel>
 
           <Panel position="bottom-center">
-            <Button size="lg" className="gap-2 shadow-xl" onClick={() => {
-              scenes.forEach(s => { if (s.status === 'idle') setSceneStatus(s.id, 'queued'); });
-            }}>
-              <Play className="w-4 h-4" />
-              Generate All Scenes
+            <Button
+              size="lg"
+              className="gap-2 shadow-xl"
+              disabled={isGeneratingAll || scenes.length === 0}
+              onClick={() => generateAllScenes()}
+            >
+              {isGeneratingAll ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating All…
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  Generate All Scenes
+                </>
+              )}
             </Button>
           </Panel>
         </ReactFlow>
+
+        {outputViewSceneId && viewScene && viewUrl && (
+          <Dialog open={Boolean(outputViewSceneId)} onOpenChange={(o) => !o && setOutputViewSceneId(null)}>
+            <DialogContent className="max-w-lg p-0 overflow-hidden">
+              <DialogHeader className="p-4 pb-0">
+                <DialogTitle className="text-sm">{viewScene.title}</DialogTitle>
+              </DialogHeader>
+              <div className="p-4 pt-2">
+                {viewIsVideo ? (
+                  <video src={viewUrl} controls autoPlay className="w-full rounded-lg bg-black" />
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={viewUrl} alt={viewScene.title} className="w-full rounded-lg" />
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </TooltipProvider>
   );

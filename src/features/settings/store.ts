@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls } from '@/core/types';
-import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS } from '@/core/config';
+import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, Scene } from '@/core/types';
+import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE } from '@/core/config';
 
 interface SettingsState {
   settings: AppSettings;
@@ -24,6 +24,8 @@ interface SettingsState {
   // Defaults
   setDefaultAspectRatio: (ratio: AppSettings['defaultAspectRatio']) => void;
   setDefaultPlatform: (platform: AppSettings['defaultPlatform']) => void;
+  setScenePromptTemplate: (template: string) => void;
+  resetScenePromptTemplate: () => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -34,6 +36,7 @@ const defaultSettings: AppSettings = {
   defaultAspectRatio: '9:16',
   defaultPlatform: 'tiktok',
   defaultFps: 30,
+  scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -102,6 +105,14 @@ export const useSettingsStore = create<SettingsState>()(
 
       setDefaultPlatform: (platform) => {
         set((s) => { s.settings.defaultPlatform = platform; });
+      },
+
+      setScenePromptTemplate: (template) => {
+        set((s) => { s.settings.scenePromptTemplate = template; });
+      },
+
+      resetScenePromptTemplate: () => {
+        set((s) => { s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE; });
       },
     }),
     {
