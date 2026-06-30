@@ -3,16 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useProjectStore } from '@/features/project/store';
-import { useChatStore } from '@/features/chat/store';
-import { useWorkflowStore } from '@/features/workflow/store';
+import { useChatStore, ChatView } from '@/features/chat';
+import { useWorkflowStore, WorkflowView } from '@/features/workflow';
 import { useSettingsStore } from '@/features/settings/store';
 import { AppSidebar } from '@/shared/ui/app-sidebar';
 import { PhaseStepper } from '@/shared/ui/phase-stepper';
 import { WelcomeView } from '@/shared/ui/welcome-view';
-import { ChatView } from '@/features/chat/chat-view';
 import { BriefView } from '@/features/brief/brief-view';
 import { StoryboardView } from '@/features/storyboard/storyboard-view';
-import { WorkflowView } from '@/features/workflow/workflow-view';
 import { TimelineView } from '@/features/timeline/timeline-view';
 import { SettingsView } from '@/features/settings/settings-view';
 import { BrandKitView } from '@/features/brand-kit/brand-kit-view';

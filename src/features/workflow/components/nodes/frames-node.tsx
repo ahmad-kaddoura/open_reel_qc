@@ -3,7 +3,7 @@
 import { memo, useRef } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { ImageIcon, X, GalleryHorizontalEnd } from 'lucide-react';
-import { useWorkflowStore } from './store';
+import { useWorkflowStore } from '@/features/workflow/store';
 
 function readImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

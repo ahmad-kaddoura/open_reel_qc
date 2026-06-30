@@ -22,25 +22,16 @@ import { useProjectStore } from '@/features/project/store';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Plus, Play, LayoutGrid, Loader2, Sparkles, Film, Camera, Eye, Zap, Wand2, AlignHorizontalSpaceAround } from 'lucide-react';
-import { SceneNode } from './scene-node';
-import { OutputNode } from './output-node';
-import { ParametersNode } from './params-node';
-import { ScriptNode } from './script-node';
-import { FramesNode } from './frames-node';
-import { buildWorkflowGraph } from './workflow-graph';
-import { useWorkflowNodeContextMenu } from './workflow-context-menu';
-import { useWorkflowPaneMenu } from './workflow-pane-menu';
+import { Plus, Play, LayoutGrid, Loader2, AlignHorizontalSpaceAround } from 'lucide-react';
+import { SceneNode } from './nodes/scene-node';
+import { OutputNode } from './nodes/output-node';
+import { ParametersNode } from './nodes/params-node';
+import { ScriptNode } from './nodes/script-node';
+import { FramesNode } from './nodes/frames-node';
+import { buildWorkflowGraph } from '../graph/workflow-graph';
+import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
+import { useWorkflowPaneMenu } from './menus/pane-menu';
 import { useSettingsStore } from '@/features/settings/store';
-
-const AI_ACTIONS = [
-  { label: 'Improve Prompt', icon: Sparkles, prompt: 'improve' },
-  { label: 'Make Cinematic', icon: Film, prompt: 'cinematic' },
-  { label: 'Make Realistic', icon: Eye, prompt: 'realistic' },
-  { label: 'Make More Viral', icon: Zap, prompt: 'viral' },
-  { label: 'Improve Camera', icon: Camera, prompt: 'camera' },
-  { label: 'Simplify', icon: Wand2, prompt: 'simplify' },
-];
 
 const nodeTypes: NodeTypes = {
   scene: SceneNode,
@@ -271,5 +262,3 @@ export function WorkflowViewInner() {
     </TooltipProvider>
   );
 }
-
-export { AI_ACTIONS };

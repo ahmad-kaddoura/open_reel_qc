@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const WorkflowViewInner = dynamic(
-  () => import('./workflow-view-inner').then(m => ({ default: m.WorkflowViewInner })),
+  () => import('./workflow-view-inner').then((m) => ({ default: m.WorkflowViewInner })),
   {
     ssr: false,
     loading: () => (
@@ -22,4 +22,4 @@ export function WorkflowView() {
   return <WorkflowViewInner />;
 }
 
-export { AI_ACTIONS } from './workflow-view-inner';
+export { AI_ACTIONS } from '../lib/ai-actions';

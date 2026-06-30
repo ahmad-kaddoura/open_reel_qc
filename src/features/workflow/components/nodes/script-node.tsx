@@ -9,8 +9,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Pencil, FileText } from 'lucide-react';
-import { useWorkflowStore } from './store';
-import { useScenePromptTemplate, buildScenePrompt } from './prompt-template';
+import { useWorkflowStore } from '@/features/workflow/store';
+import { useScenePromptTemplate, buildScenePrompt } from '../../lib/prompt-template';
 import type { Scene } from '@/core/types';
 
 const SECTIONS = [

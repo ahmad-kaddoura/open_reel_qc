@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from '@/components/ui/command';
-import { useWorkflowStore } from './store';
+import { useWorkflowStore } from '@/features/workflow/store';
 import {
   ADD_NODE_OPTIONS,
   addNodeValue,
   parseAddNodeValue,
-} from './workflow-node-catalog';
+} from '../../graph/workflow-node-catalog';
 
 type PaneMenuState = {
   x: number;

@@ -8,8 +8,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Play, RotateCcw, Trash2, Sparkles, ImageIcon, Loader2 } from 'lucide-react';
-import { AI_ACTIONS } from './workflow-view';
-import { useWorkflowStore } from './store';
+import { AI_ACTIONS } from '../../lib/ai-actions';
+import { useWorkflowStore } from '@/features/workflow/store';
 import { useSettingsStore } from '@/features/settings/store';
 import type { Scene } from '@/core/types';
 

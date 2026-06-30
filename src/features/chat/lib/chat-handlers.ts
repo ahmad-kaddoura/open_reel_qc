@@ -1,5 +1,5 @@
 import type { Project, Scene, VideoBrief } from '@/core/types';
-import { buildVideoBriefPatch } from '@/features/chat/video-output-utils';
+import { buildVideoBriefPatch } from './video-output-utils';
 
 export type ChatIntent = 'planning' | 'brainstorm' | 'create_brief' | 'generate_storyboard' | 'hooks' | 'review';
 

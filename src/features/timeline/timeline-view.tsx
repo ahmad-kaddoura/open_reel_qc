@@ -1,6 +1,6 @@
 'use client';
 
-import { useWorkflowStore } from '@/features/workflow/store';
+import { useWorkflowStore } from '@/features/workflow';
 import { useProjectStore } from '@/features/project/store';
 import { StatusBadge } from '@/shared/ui/status-badge';
 import { Button } from '@/components/ui/button';

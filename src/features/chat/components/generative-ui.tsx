@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useProjectStore } from '@/features/project/store';
-import { useWorkflowStore } from '@/features/workflow/store';
+import { useWorkflowStore } from '@/features/workflow';
 import type { StylePreset, TargetPlatform, VideoBrief, Scene, HookOption, DirectorReview, AspectRatio } from '@/core/types';
-import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '@/features/chat/video-output-utils';
+import { buildVideoBriefPatch, pixelsFromResolutionLabel, resolutionLabelFromPixels } from '../lib/video-output-utils';
 
 export interface GenerativeUIOptions {
   /** When set, clicking a preset saves prefs and sends this as the user message. */

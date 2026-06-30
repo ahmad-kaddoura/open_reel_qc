@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/features/project/store';
-import { useChatStore } from '@/features/chat/store';
-import { useWorkflowStore } from '@/features/workflow/store';
+import { useChatStore } from '@/features/chat';
+import { useWorkflowStore } from '@/features/workflow';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Send, FileText, Clapperboard, Wand2, Eye, SlidersHorizontal, Paperclip, X, ArrowRight } from 'lucide-react';
 import { renderGenerativeUI } from './generative-ui';
 import { VideoConfigPanel } from './video-config-panel';
-import { buildBriefFromProject } from '@/features/chat/chat-handlers';
+import { buildBriefFromProject } from '../lib/chat-handlers';
 import ReactMarkdown from 'react-markdown';
 import type { ChatAttachment, GenerativeUIComponent, Scene, VideoBrief } from '@/core/types';
 

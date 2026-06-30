@@ -6,8 +6,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useWorkflowStore } from './store';
-import { sceneIdFromNodeId, nodeLabel } from './workflow-node-utils';
+import { useWorkflowStore } from '@/features/workflow/store';
+import { sceneIdFromNodeId, nodeLabel } from '../../graph/workflow-node-utils';
 
 type ContextMenuState = {
   x: number;

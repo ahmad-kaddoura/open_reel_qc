@@ -7,7 +7,7 @@ import {
   buildBriefFromProject,
   buildStoryboardScenes,
   BRAINSTORM_SYSTEM_PROMPT,
-} from '@/features/chat/chat-handlers';
+} from '@/features/chat';
 
 const PLANNER_SYSTEM_PROMPT = `You are VideoForge's video planning assistant. Your job is to help users pick the concrete output specs for their video through a structured 4-step conversation, asking ONE question at a time.
 

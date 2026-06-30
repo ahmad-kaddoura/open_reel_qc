@@ -5,17 +5,17 @@ import { applyNodeChanges, applyEdgeChanges, type OnNodesChange, type OnEdgesCha
 import type { Scene, SceneStatus } from '@/core/types';
 import { useProjectStore } from '@/features/project/store';
 
-import { generateSceneAssets } from './generate-scene';
-import { buildScenePrompt } from './prompt-template';
+import { generateSceneAssets } from './lib/generate-scene';
+import { buildScenePrompt } from './lib/prompt-template';
 import { useSettingsStore } from '@/features/settings/store';
 import {
   computeAutoLayout,
   loadLayoutFromStorage,
   saveLayoutToStorage,
   outputNodeId,
-} from './workflow-layout';
-import { nodeIdsForScene, sceneIdFromNodeId } from './workflow-node-utils';
-import { nodeIdForKind, type WorkflowNodeKind } from './workflow-node-catalog';
+} from './graph/workflow-layout';
+import { nodeIdsForScene, sceneIdFromNodeId } from './graph/workflow-node-utils';
+import { nodeIdForKind, type WorkflowNodeKind } from './graph/workflow-node-catalog';
 
 function persistLayout(get: () => WorkflowState) {
   const projectId = get().layoutProjectId;

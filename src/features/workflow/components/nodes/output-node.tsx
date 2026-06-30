@@ -9,10 +9,7 @@ import {
 import {
   Loader2, AlertCircle, Download, Eye, RotateCcw, Trash2, Film,
 } from 'lucide-react';
-import { useWorkflowStore } from './store';
-import { outputNodeId } from './workflow-layout';
-
-export { outputNodeId };
+import { useWorkflowStore } from '@/features/workflow/store';
 
 function downloadAsset(url: string, filename: string) {
   const a = document.createElement('a');

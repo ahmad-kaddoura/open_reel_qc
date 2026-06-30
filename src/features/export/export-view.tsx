@@ -1,7 +1,7 @@
 'use client';
 
 import { useProjectStore } from '@/features/project/store';
-import { useWorkflowStore } from '@/features/workflow/store';
+import { useWorkflowStore } from '@/features/workflow';
 import { useSettingsStore } from '@/features/settings/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

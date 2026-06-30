@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/features/project/store';
-import { renderGenerativeUI } from '@/features/chat/generative-ui';
+import { renderGenerativeUI } from './generative-ui';
 import type { GenerativeUIComponent } from '@/core/types';
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 

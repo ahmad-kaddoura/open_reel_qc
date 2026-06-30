@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CAMERA_MOVEMENTS, STYLE_PRESETS } from '@/core/config';
-import { useWorkflowStore } from './store';
+import { useWorkflowStore } from '@/features/workflow/store';
 
 const ASPECT_RATIOS = ['9:16', '16:9', '1:1', '4:5', '21:9'];
 
