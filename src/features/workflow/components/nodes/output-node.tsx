@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useWorkflowStore } from '@/features/workflow/store';
 import { useProjectStore } from '@/features/project/store';
+import { estimateSceneGenerationMs, formatGenerationDuration } from '@/features/workflow/lib/generate-scene';
 
 function downloadAsset(url: string, filename: string) {
   const a = document.createElement('a');
@@ -23,58 +24,23 @@ function downloadAsset(url: string, filename: string) {
   document.body.removeChild(a);
 }
 
-function OutputNodeComponent({ data }: NodeProps) {
-  const final = Boolean((data as { final?: boolean }).final);
-  const sceneId = (data as { sceneId?: string }).sceneId;
-  const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
-  const sceneMap = useWorkflowStore((s) => s.sceneMap);
-  const scenes = useMemo(
-    () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
-    [sceneOrder, sceneMap],
-  );
-  const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
-  const setPhase = useProjectStore((s) => s.setPhase);
-  const scene = sceneId ? sceneMap[sceneId] : undefined;
+function SceneOutputNode({ sceneId }: { sceneId: string }) {
+  const scene = useWorkflowStore((s) => s.sceneMap[sceneId]);
   const clearSceneOutput = useWorkflowStore((s) => s.clearSceneOutput);
   const retrySceneGeneration = useWorkflowStore((s) => s.retrySceneGeneration);
+  const [now, setNow] = useState(() => Date.now());
 
-  if (final) {
-    const completed = scenes.filter((item) => item.status === 'completed').length;
-    const totalDuration = scenes.length ? scenes[scenes.length - 1].endTime : 0;
-    const allComplete = scenes.length > 0 && completed === scenes.length;
-    return (
-      <div className="relative">
-        <Handle type="target" position={Position.Left} id="output-in" className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
-        <div className="w-[240px] rounded-xl border-2 border-emerald-500/60 bg-card shadow-xl overflow-hidden">
-          <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
-            <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Final Output</span>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400">
-                <Layers className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold">Connected Timeline Render</div>
-                <div className="text-[10px] text-muted-foreground">{completed}/{scenes.length} scenes ready · {totalDuration}s</div>
-              </div>
-            </div>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              Combines all connected scene videos in sequence and sends them to Timeline for trim, rearrange, preview, and export.
-            </p>
-            <Button size="sm" className="h-7 w-full gap-1.5 text-xs" onClick={() => allComplete ? setPhase('timeline') : generateAllScenes()}>
-              {allComplete ? 'Open Timeline' : 'Generate Connected Scenes'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isGenerating = scene?.status === 'generating' || scene?.status === 'regenerating';
+  const isQueued = scene?.status === 'queued';
 
-  if (!sceneId || !scene) return null;
+  useEffect(() => {
+    if (!isGenerating && !isQueued) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating, isQueued]);
 
-  const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
-  const isQueued = scene.status === 'queued';
+  if (!scene) return null;
+
   const isComplete = scene.status === 'completed';
   const isFailed = scene.status === 'failed';
   const previewUrl = scene.generatedVideoUrl ?? scene.generatedStartFrameUrl;
@@ -82,6 +48,10 @@ function OutputNodeComponent({ data }: NodeProps) {
   const isVideo = Boolean(scene.generatedVideoUrl);
   const ext = isVideo ? 'mp4' : 'png';
   const filename = `${scene.title.replace(/\s+/g, '-').toLowerCase()}-scene-${scene.order + 1}.${ext}`;
+  const startedAt = scene.generationStartedAt ? new Date(scene.generationStartedAt).getTime() : null;
+  const estimatedTotalMs = estimateSceneGenerationMs(scene);
+  const elapsedMs = startedAt ? Math.max(0, now - startedAt) : 0;
+  const remainingMs = startedAt ? Math.max(0, estimatedTotalMs - elapsedMs) : estimatedTotalMs;
 
   const borderClass = isGenerating || isQueued
     ? 'border-blue-500/60 shadow-blue-500/15'
@@ -113,20 +83,30 @@ function OutputNodeComponent({ data }: NodeProps) {
           <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Output</span>
         </div>
 
-        <div className="h-[130px] bg-muted/30 relative overflow-hidden">
+        <div className="h-[148px] bg-muted/30 relative overflow-hidden">
           {isGenerating || isQueued ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 bg-blue-500/5">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-3 bg-blue-500/5">
               <Loader2 className="w-7 h-7 text-blue-400 animate-spin" />
               <span className="text-[10px] text-blue-400 font-medium">
                 {isQueued ? 'Queued…' : 'Generating video…'}
               </span>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mx-3">
                 <div
-                  className="h-full bg-blue-500 transition-all duration-300"
+                  className="h-full bg-blue-500 transition-all duration-500 ease-out"
                   style={{ width: `${isQueued ? 5 : progress}%` }}
                 />
               </div>
-              {!isQueued && <span className="text-[9px] text-muted-foreground">{progress}%</span>}
+              {!isQueued && (
+                <>
+                  <span className="text-[9px] font-medium text-blue-300">{progress}%</span>
+                  <span className="text-[9px] text-muted-foreground text-center leading-relaxed">
+                    {formatGenerationDuration(elapsedMs)} elapsed · ~{formatGenerationDuration(remainingMs)} left
+                  </span>
+                  {scene.generationError && (
+                    <span className="text-[9px] text-amber-300/90 text-center line-clamp-2">{scene.generationError}</span>
+                  )}
+                </>
+              )}
             </div>
           ) : isComplete && previewUrl ? (
             isVideo ? (
@@ -143,9 +123,12 @@ function OutputNodeComponent({ data }: NodeProps) {
               <img src={previewUrl} alt={scene.title} className="w-full h-full object-cover bg-muted/30" />
             )
           ) : isFailed ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-red-400 bg-red-500/5">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-red-400 bg-red-500/5 p-3">
               <AlertCircle className="w-6 h-6" />
               <span className="text-[10px] font-medium">Failed</span>
+              {scene.generationError && (
+                <span className="text-[9px] text-center text-red-300/80 line-clamp-3">{scene.generationError}</span>
+              )}
             </div>
           ) : null}
 
@@ -159,7 +142,7 @@ function OutputNodeComponent({ data }: NodeProps) {
         <div className="p-2 border-t border-border/50 bg-card">
           <p className="text-[10px] font-medium line-clamp-1 text-muted-foreground mb-1">{scene.title}</p>
 
-          {(isComplete || isFailed) && (
+          {(isComplete || isFailed || (isGenerating && scene.generationError)) && (
             <div className="flex items-center justify-between">
               {isComplete && previewUrl && (
                 <>
@@ -203,6 +186,52 @@ function OutputNodeComponent({ data }: NodeProps) {
       </div>
     </div>
   );
+}
+
+function OutputNodeComponent({ data }: NodeProps) {
+  const final = Boolean((data as { final?: boolean }).final);
+  const sceneId = (data as { sceneId?: string }).sceneId;
+  const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
+  const sceneMap = useWorkflowStore((s) => s.sceneMap);
+  const scenes = useMemo(
+    () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
+    [sceneOrder, sceneMap],
+  );
+  const setPhase = useProjectStore((s) => s.setPhase);
+
+  if (final) {
+    return (
+      <div className="relative">
+        <Handle type="target" position={Position.Left} id="output-in" className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-background" />
+        <div className="w-[240px] rounded-xl border-2 border-emerald-500/60 bg-card shadow-xl overflow-hidden">
+          <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
+            <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Final Output</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400">
+                <Layers className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold">Connected Timeline Render</div>
+                <div className="text-[10px] text-muted-foreground">{scenes.length} scenes · {scenes.length ? scenes[scenes.length - 1].endTime : 0}s</div>
+              </div>
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              All scene videos are connected in sequence. Open Timeline to trim, rearrange, preview, and export.
+            </p>
+            <Button size="sm" className="h-7 w-full gap-1.5 text-xs" onClick={() => setPhase('timeline')}>
+              Open Timeline
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sceneId) return null;
+
+  return <SceneOutputNode sceneId={sceneId} />;
 }
 
 export const OutputNode = memo(OutputNodeComponent);

@@ -1,14 +1,28 @@
 import type { GenerationModelRouting, Scene } from '@/core/types';
 
-// Small public-domain sample clips so the node can actually play a video
-// while the real generation API isn't wired up yet.
-const SAMPLE_CLIPS = [
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBigBuckBunny.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-];
+export type GenerationProgressTiming = {
+  elapsedMs: number;
+  estimatedRemainingMs: number;
+};
+
+export class SceneGenerationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SceneGenerationError';
+  }
+}
+
+const POLL_INTERVAL_MS = 2_500;
+const CLIENT_TIMEOUT_MS = 5 * 60 * 1_000;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function estimateGenerationMs(scene: Scene): number {
+  // Qwen video synthesis typically takes 1–3 minutes per clip.
+  return Math.max(90_000, scene.duration * 18_000);
+}
 
 function placeholderFrameUrl(title: string, order: number): string {
   const hue = (order * 67) % 360;
@@ -26,14 +40,51 @@ function placeholderFrameUrl(title: string, order: number): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+function reportProgress(
+  startedAt: number,
+  estimatedTotalMs: number,
+  pct: number,
+  onProgress: (pct: number, timing?: GenerationProgressTiming) => void,
+) {
+  const elapsedMs = Date.now() - startedAt;
+  onProgress(pct, {
+    elapsedMs,
+    estimatedRemainingMs: Math.max(0, estimatedTotalMs - elapsedMs),
+  });
+}
+
+function progressFromElapsed(startedAt: number, estimatedTotalMs: number): number {
+  const elapsedMs = Date.now() - startedAt;
+  const ratio = Math.min(elapsedMs / estimatedTotalMs, 0.97);
+  return Math.round(10 + ratio * 85);
+}
+
+async function parseApiError(response: Response): Promise<string> {
+  try {
+    const data = await response.json();
+    return data.error || data.message || `Request failed (${response.status})`;
+  } catch {
+    return `Request failed (${response.status})`;
+  }
+}
+
+type PollResponse =
+  | { status: 'pending' | 'running'; taskId: string }
+  | { status: 'succeeded'; taskId: string; videoUrl: string; model: string }
+  | { status: 'failed'; taskId: string; error: string };
+
 export async function generateSceneAssets(
   scene: Scene,
-  onProgress: (pct: number) => void,
+  onProgress: (pct: number, timing?: GenerationProgressTiming) => void,
   options?: {
     prompt?: string;
     generationModels?: GenerationModelRouting;
+    existingTaskId?: string;
+    existingModel?: string;
+    onTaskSubmitted?: (taskId: string, model: string) => void | Promise<void>;
+    signal?: AbortSignal;
   },
-): Promise<{ startFrameUrl: string; endFrameUrl: string; videoUrl: string }> {
+): Promise<{ startFrameUrl: string; endFrameUrl: string; videoUrl: string; taskId: string; model: string }> {
   const startFrameUrl =
     scene.startFrameUrl ??
     scene.generatedStartFrameUrl ??
@@ -44,13 +95,15 @@ export async function generateSceneAssets(
     scene.generatedEndFrameUrl ??
     placeholderFrameUrl(`${scene.title} End`, scene.order);
 
-  for (const pct of [8, 18, 30]) {
-    await new Promise((r) => setTimeout(r, 350 + Math.random() * 250));
-    onProgress(pct);
-  }
+  const startedAt = Date.now();
+  const estimatedTotalMs = estimateGenerationMs(scene);
+  let taskId = options?.existingTaskId;
+  let model = options?.existingModel || options?.generationModels?.videoModel || '';
 
-  try {
-    const response = await fetch('/api/generate-scene', {
+  reportProgress(startedAt, estimatedTotalMs, taskId ? 12 : 5, onProgress);
+
+  if (!taskId) {
+    const submitResponse = await fetch('/api/generate-scene', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -59,27 +112,73 @@ export async function generateSceneAssets(
         endFrameUrl,
         generationModels: options?.generationModels,
       }),
+      signal: options?.signal,
     });
 
-    onProgress(72);
-
-    if (!response.ok) {
-      throw new Error(await response.text());
+    if (!submitResponse.ok) {
+      throw new SceneGenerationError(await parseApiError(submitResponse));
     }
 
-    const data = await response.json();
-    onProgress(100);
-    return { startFrameUrl, endFrameUrl, videoUrl: data.videoUrl };
-  } catch (error) {
-    console.warn('Qwen video generation failed, using local preview clip.', error);
+    const submitted = await submitResponse.json();
+    taskId = submitted.taskId;
+    model = submitted.model || model;
+    if (!taskId) {
+      throw new SceneGenerationError('Video generation did not return a task id.');
+    }
+
+    await options?.onTaskSubmitted?.(taskId, model);
+    reportProgress(startedAt, estimatedTotalMs, 12, onProgress);
   }
 
-  for (const pct of [55, 72, 88, 100]) {
-    await new Promise((r) => setTimeout(r, 350 + Math.random() * 250));
-    onProgress(pct);
+  while (Date.now() - startedAt < CLIENT_TIMEOUT_MS) {
+    if (options?.signal?.aborted) {
+      throw new SceneGenerationError('Generation cancelled.');
+    }
+
+    reportProgress(startedAt, estimatedTotalMs, progressFromElapsed(startedAt, estimatedTotalMs), onProgress);
+
+    const params = new URLSearchParams({ taskId, ...(model ? { model } : {}) });
+    const statusResponse = await fetch(`/api/generate-scene?${params.toString()}`, {
+      signal: options?.signal,
+    });
+
+    if (!statusResponse.ok) {
+      throw new SceneGenerationError(await parseApiError(statusResponse));
+    }
+
+    const status = await statusResponse.json() as PollResponse;
+
+    if (status.status === 'succeeded') {
+      reportProgress(startedAt, estimatedTotalMs, 100, onProgress);
+      return {
+        startFrameUrl,
+        endFrameUrl,
+        videoUrl: status.videoUrl,
+        taskId: status.taskId,
+        model: status.model || model,
+      };
+    }
+
+    if (status.status === 'failed') {
+      throw new SceneGenerationError(status.error || 'Video generation failed.');
+    }
+
+    await delay(POLL_INTERVAL_MS);
   }
 
-  const videoUrl = SAMPLE_CLIPS[scene.order % SAMPLE_CLIPS.length];
+  throw new SceneGenerationError(
+    'Video generation timed out after 5 minutes. Your task is saved — refresh or retry to resume polling.',
+  );
+}
 
-  return { startFrameUrl, endFrameUrl, videoUrl };
+export function estimateSceneGenerationMs(scene: Scene): number {
+  return estimateGenerationMs(scene);
+}
+
+export function formatGenerationDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return sec > 0 ? `${min}m ${sec}s` : `${min}m`;
 }

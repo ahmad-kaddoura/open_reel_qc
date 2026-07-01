@@ -306,7 +306,7 @@ async function callDashScopeImageSynthesis(
   } satisfies QwenCallError;
 }
 
-export async function callQwenVideoGeneration(
+export async function submitQwenVideoTask(
   config: QwenConfig,
   options: {
     prompt: string;
@@ -314,7 +314,7 @@ export async function callQwenVideoGeneration(
     endFrameUrl?: string;
     model?: string;
   },
-): Promise<{ url: string; model: string }> {
+): Promise<{ taskId: string; model: string }> {
   const base = dashScopeBaseUrl(config.baseUrl);
   const submitUrl = `${base}/api/v1/services/aigc/video-generation/video-synthesis`;
   const model = options.model || config.videoModel;
@@ -360,42 +360,88 @@ export async function callQwenVideoGeneration(
     } satisfies QwenCallError;
   }
 
+  return { taskId, model };
+}
+
+export type QwenVideoTaskPollResult =
+  | { status: 'pending' | 'running'; taskId: string }
+  | { status: 'succeeded'; taskId: string; url: string; model: string }
+  | { status: 'failed'; taskId: string; message: string };
+
+export async function pollQwenVideoTask(
+  config: QwenConfig,
+  taskId: string,
+  model: string,
+): Promise<QwenVideoTaskPollResult> {
+  const base = dashScopeBaseUrl(config.baseUrl);
   const taskUrl = `${base}/api/v1/tasks/${taskId}`;
-  for (let i = 0; i < 120; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const task = await fetch(taskUrl, {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-    });
 
-    if (!task.ok) {
-      const body = await task.text().catch(() => '');
-      throw {
-        kind: task.status === 401 || task.status === 403 ? 'auth' : 'api',
-        status: task.status,
-        message: body.slice(0, 500) || `DashScope video task polling error ${task.status}`,
-      } satisfies QwenCallError;
-    }
+  const task = await fetch(taskUrl, {
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+  });
 
-    const data = await task.json();
-    const status = data?.output?.task_status;
-    if (status === 'SUCCEEDED') {
-      const videoUrl = data?.output?.video_url || data?.output?.results?.[0]?.url || data?.output?.result_url;
-      if (!videoUrl) {
-        throw {
-          kind: 'api',
-          status: 502,
-          message: 'DashScope video task succeeded but returned no video URL.',
-        } satisfies QwenCallError;
-      }
-      return { url: videoUrl, model };
-    }
-    if (status === 'FAILED' || status === 'CANCELED' || status === 'UNKNOWN') {
+  if (!task.ok) {
+    const body = await task.text().catch(() => '');
+    throw {
+      kind: task.status === 401 || task.status === 403 ? 'auth' : 'api',
+      status: task.status,
+      message: body.slice(0, 500) || `DashScope video task polling error ${task.status}`,
+    } satisfies QwenCallError;
+  }
+
+  const data = await task.json();
+  const taskStatus = data?.output?.task_status;
+
+  if (taskStatus === 'SUCCEEDED') {
+    const videoUrl = data?.output?.video_url || data?.output?.results?.[0]?.url || data?.output?.result_url;
+    if (!videoUrl) {
       throw {
         kind: 'api',
         status: 502,
-        message: data?.output?.message || `DashScope video task ${status.toLowerCase()}.`,
+        message: 'DashScope video task succeeded but returned no video URL.',
+      } satisfies QwenCallError;
+    }
+    return { status: 'succeeded', taskId, url: videoUrl, model };
+  }
+
+  if (taskStatus === 'FAILED' || taskStatus === 'CANCELED' || taskStatus === 'UNKNOWN') {
+    return {
+      status: 'failed',
+      taskId,
+      message: data?.output?.message || `DashScope video task ${String(taskStatus).toLowerCase()}.`,
+    };
+  }
+
+  return {
+    status: taskStatus === 'RUNNING' ? 'running' : 'pending',
+    taskId,
+  };
+}
+
+export async function callQwenVideoGeneration(
+  config: QwenConfig,
+  options: {
+    prompt: string;
+    startFrameUrl?: string;
+    endFrameUrl?: string;
+    model?: string;
+  },
+): Promise<{ url: string; model: string }> {
+  const { taskId, model } = await submitQwenVideoTask(config, options);
+
+  for (let i = 0; i < 120; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const result = await pollQwenVideoTask(config, taskId, model);
+    if (result.status === 'succeeded') {
+      return { url: result.url, model: result.model };
+    }
+    if (result.status === 'failed') {
+      throw {
+        kind: 'api',
+        status: 502,
+        message: result.message,
       } satisfies QwenCallError;
     }
   }

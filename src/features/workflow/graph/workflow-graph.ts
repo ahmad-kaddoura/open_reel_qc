@@ -10,6 +10,7 @@ import {
   outputNodeId,
   finalOutputNodeId,
   shouldShowOutputNode,
+  allScenesReadyForFinalOutput,
   resolvePosition,
   computeAutoLayout,
   type NodePositions,
@@ -235,7 +236,7 @@ export function buildWorkflowGraph(
     }
   });
 
-  if (scenes.length > 0 && visible(finalOutputNodeId)) {
+  if (allScenesReadyForFinalOutput(scenes) && visible(finalOutputNodeId)) {
     nodes.push({
       id: finalOutputNodeId,
       type: 'output',
@@ -245,17 +246,15 @@ export function buildWorkflowGraph(
 
     scenes.forEach((scene) => {
       const oid = outputNodeId(scene.id);
-      const source = visible(oid) && shouldShowOutputNode(scene) ? oid : scene.id;
-      if (!link(source, finalOutputNodeId)) return;
+      if (!link(oid, finalOutputNodeId)) return;
       edges.push({
-        id: `e-final-${source}`,
-        source,
-        sourceHandle: source === oid ? 'output-out' : 'output-out',
+        id: `e-final-${oid}`,
+        source: oid,
+        sourceHandle: 'output-out',
         target: finalOutputNodeId,
         targetHandle: 'output-in',
         type: 'smoothstep',
-        animated: scene.status === 'generating' || scene.status === 'regenerating' || scene.status === 'queued',
-        style: { stroke: C_OUTPUT_OK, strokeWidth: 2, opacity: scene.status === 'completed' ? 0.9 : 0.35 },
+        style: { stroke: C_OUTPUT_OK, strokeWidth: 2, opacity: 0.9 },
         markerEnd: { type: MarkerType.ArrowClosed, color: C_OUTPUT_OK },
         ...edgeLabels('timeline', C_OUTPUT_OK, onEdge),
       });

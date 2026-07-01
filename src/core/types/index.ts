@@ -134,6 +134,10 @@ export interface Scene {
   voiceover?: string;
   status: SceneStatus;
   generationProgress?: number;
+  generationStartedAt?: string;
+  generationTaskId?: string;
+  generationModel?: string;
+  generationError?: string;
   versions: SceneVersion[];
   costEstimate?: number;
   cta?: string;

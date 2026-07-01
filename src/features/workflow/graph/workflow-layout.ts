@@ -9,6 +9,20 @@ export function shouldShowOutputNode(scene: Scene): boolean {
   return ACTIVE_OUTPUT.includes(scene.status);
 }
 
+export function sceneHasGeneratedOutput(scene: Scene): boolean {
+  return Boolean(
+    scene.generatedVideoUrl ||
+    scene.generatedStartFrameUrl ||
+    (scene.versions?.length ?? 0) > 0,
+  );
+}
+
+export function allScenesReadyForFinalOutput(scenes: Scene[]): boolean {
+  return scenes.length > 0 && scenes.every(
+    (scene) => scene.status === 'completed' && sceneHasGeneratedOutput(scene),
+  );
+}
+
 export const LAYOUT = {
   PARAMETERS_WIDTH: 180,
   SCRIPT_WIDTH: 220,
@@ -109,7 +123,7 @@ export function computeAutoLayout(scenes: Scene[]): NodePositions {
     x += groupW + LAYOUT.GROUP_GAP;
   });
 
-  if (scenes.length > 0) {
+  if (scenes.length > 0 && allScenesReadyForFinalOutput(scenes)) {
     const lastScene = scenes[scenes.length - 1];
     const lastScenePos = positions[lastScene.id] ?? { x: 480, y: baseY + LAYOUT.INPUT_STACK_GAP };
     positions[finalOutputNodeId] = {

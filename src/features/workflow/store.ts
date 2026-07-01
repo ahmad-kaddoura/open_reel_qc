@@ -5,18 +5,43 @@ import { applyNodeChanges, applyEdgeChanges, type OnNodesChange, type OnEdgesCha
 import type { Scene, SceneStatus } from '@/core/types';
 import { useProjectStore } from '@/features/project/store';
 
-import { generateSceneAssets } from './lib/generate-scene';
+import { generateSceneAssets, SceneGenerationError } from './lib/generate-scene';
 import { buildScenePrompt } from './lib/prompt-template';
 import { useSettingsStore } from '@/features/settings/store';
+import { storage } from '@/services/storage/indexeddb';
 import {
   computeAutoLayout,
   loadLayoutFromStorage,
   saveLayoutToStorage,
   outputNodeId,
   shouldShowOutputNode,
+  allScenesReadyForFinalOutput,
+  finalOutputNodeId,
 } from './graph/workflow-layout';
 import { nodeIdsForScene, sceneIdFromNodeId } from './graph/workflow-node-utils';
 import { nodeIdForKind, type WorkflowNodeKind } from './graph/workflow-node-catalog';
+
+const generationAbortControllers = new Map<string, AbortController>();
+let batchGenerationCancelled = false;
+
+function registerGenerationAbortController(sceneId: string): AbortController {
+  const existing = generationAbortControllers.get(sceneId);
+  if (existing) existing.abort();
+  const controller = new AbortController();
+  generationAbortControllers.set(sceneId, controller);
+  return controller;
+}
+
+function clearGenerationAbortController(sceneId: string) {
+  generationAbortControllers.delete(sceneId);
+}
+
+function abortAllGenerationControllers() {
+  for (const controller of generationAbortControllers.values()) {
+    controller.abort();
+  }
+  generationAbortControllers.clear();
+}
 
 function persistLayout(get: () => WorkflowState) {
   const projectId = get().layoutProjectId;
@@ -64,6 +89,13 @@ function syncOutputNodeVisibility(state: {
   hiddenNodeIds: Record<string, true>;
   shownOutputSceneIds: Record<string, true>;
 }) {
+  const scenes = state.sceneOrder.map((id) => state.sceneMap[id]).filter(Boolean);
+  if (allScenesReadyForFinalOutput(scenes)) {
+    delete state.hiddenNodeIds[finalOutputNodeId];
+  } else {
+    state.hiddenNodeIds[finalOutputNodeId] = true;
+  }
+
   for (const sceneId of state.sceneOrder) {
     const scene = state.sceneMap[sceneId];
     if (!scene) continue;
@@ -75,6 +107,24 @@ function syncOutputNodeVisibility(state: {
       delete state.shownOutputSceneIds[sceneId];
     }
   }
+}
+
+function sceneHasGeneratedOutput(scene: Scene): boolean {
+  return Boolean(
+    scene.generatedVideoUrl ||
+    scene.generatedStartFrameUrl ||
+    (scene.versions?.length ?? 0) > 0,
+  );
+}
+
+function sceneNeedsGeneration(scene: Scene): boolean {
+  if (scene.status === 'generating' || scene.status === 'regenerating') {
+    return false;
+  }
+  if (scene.status === 'completed' && sceneHasGeneratedOutput(scene)) {
+    return false;
+  }
+  return scene.status === 'idle' || scene.status === 'failed' || scene.status === 'queued';
 }
 
 function createSceneRecord(scenes: Scene[], afterIndex?: number): Scene {
@@ -150,6 +200,7 @@ interface WorkflowState {
   clearSceneOutput: (id: string) => Promise<void>;
   retrySceneGeneration: (id: string) => Promise<void>;
   resumePendingGenerations: () => Promise<void>;
+  cancelAllGenerations: () => Promise<void>;
   isGeneratingAll: boolean;
 
   // AI actions on scenes
@@ -334,21 +385,30 @@ export const useWorkflowStore = create<WorkflowState>()(
     generateScene: async (id, options) => {
       const scene = get().sceneMap[id];
       if (!scene) return;
+      if (batchGenerationCancelled && !options?.resume) return;
       const isResume = options?.resume === true;
-      if (!isResume && (scene.status === 'generating' || scene.status === 'regenerating' || scene.status === 'queued')) {
+      if (!isResume && (scene.status === 'generating' || scene.status === 'regenerating')) {
+        return;
+      }
+      if (!isResume && scene.status === 'completed' && sceneHasGeneratedOutput(scene)) {
         return;
       }
 
       const template = useSettingsStore.getState().settings.scenePromptTemplate;
       const builtPrompt = buildScenePrompt(scene, template);
+      const controller = registerGenerationAbortController(id);
 
       set((s) => {
         if (s.sceneMap[id]) {
           s.sceneMap[id].status = 'generating';
           s.sceneMap[id].generationProgress = isResume ? (s.sceneMap[id].generationProgress ?? 0) : 0;
+          s.sceneMap[id].generationStartedAt = isResume && s.sceneMap[id].generationStartedAt
+            ? s.sceneMap[id].generationStartedAt
+            : new Date().toISOString();
           s.sceneMap[id].enhancedPrompt = builtPrompt;
           delete s.hiddenNodeIds[outputNodeId(id)];
           s.shownOutputSceneIds[id] = true;
+          s.hiddenNodeIds[finalOutputNodeId] = true;
         }
       });
       persistLayout(get);
@@ -368,6 +428,31 @@ export const useWorkflowStore = create<WorkflowState>()(
           {
             prompt: builtPrompt,
             generationModels: useSettingsStore.getState().settings.generationModels,
+            existingTaskId: isResume ? scene.generationTaskId : undefined,
+            existingModel: scene.generationModel,
+            onTaskSubmitted: async (taskId, model) => {
+              set((s) => {
+                if (!s.sceneMap[id]) return;
+                s.sceneMap[id].generationTaskId = taskId;
+                s.sceneMap[id].generationModel = model;
+                delete s.sceneMap[id].generationError;
+              });
+              await persistStoryboard(get);
+              const project = useProjectStore.getState().getCurrentProject();
+              if (project) {
+                await storage.saveJob({
+                  id: `${project.id}-${id}`,
+                  projectId: project.id,
+                  sceneId: id,
+                  type: 'video',
+                  status: 'running',
+                  progress: 0,
+                  startedAt: new Date().toISOString(),
+                  metadata: { taskId, model },
+                });
+              }
+            },
+            signal: controller.signal,
           },
         );
 
@@ -378,6 +463,10 @@ export const useWorkflowStore = create<WorkflowState>()(
           const sc = s.sceneMap[id];
           sc.status = 'completed';
           sc.generationProgress = 100;
+          sc.generationStartedAt = undefined;
+          sc.generationTaskId = undefined;
+          sc.generationModel = undefined;
+          sc.generationError = undefined;
           sc.generatedStartFrameUrl = result.startFrameUrl;
           sc.generatedEndFrameUrl = result.endFrameUrl;
           sc.startFrameUrl = result.startFrameUrl;
@@ -395,7 +484,24 @@ export const useWorkflowStore = create<WorkflowState>()(
         });
         await persistStoryboard(get);
         persistLayout(get);
+        if (allScenesReadyForFinalOutput(get().getScenes())) {
+          set((s) => {
+            delete s.hiddenNodeIds[finalOutputNodeId];
+          });
+          persistLayout(get);
+        }
         if (project) {
+          await storage.saveJob({
+            id: `${project.id}-${id}`,
+            projectId: project.id,
+            sceneId: id,
+            type: 'video',
+            status: 'completed',
+            progress: 100,
+            completedAt: new Date().toISOString(),
+            outputUrl: result.videoUrl,
+            metadata: { taskId: result.taskId, model: result.model },
+          });
           await useProjectStore.getState().updateCurrentProject({
             usageEvents: [
               ...(project.usageEvents ?? []),
@@ -414,44 +520,114 @@ export const useWorkflowStore = create<WorkflowState>()(
             ],
           });
         }
-      } catch {
+      } catch (error) {
+        if (batchGenerationCancelled || controller.signal.aborted) {
+          return;
+        }
+        const message = error instanceof SceneGenerationError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Generation failed';
+        const canResume = message.includes('timed out') || message.includes('refresh or retry');
         set((s) => {
-          if (s.sceneMap[id]) {
-            s.sceneMap[id].status = 'failed';
+          if (!s.sceneMap[id]) return;
+          s.sceneMap[id].status = canResume ? 'generating' : 'failed';
+          s.sceneMap[id].generationError = message;
+          if (!canResume) {
             s.sceneMap[id].generationProgress = 0;
-            s.shownOutputSceneIds[id] = true;
+            s.sceneMap[id].generationStartedAt = undefined;
+            s.sceneMap[id].generationTaskId = undefined;
+            s.sceneMap[id].generationModel = undefined;
           }
+          s.shownOutputSceneIds[id] = true;
         });
+        const project = useProjectStore.getState().getCurrentProject();
+        if (project) {
+          await storage.saveJob({
+            id: `${project.id}-${id}`,
+            projectId: project.id,
+            sceneId: id,
+            type: 'video',
+            status: canResume ? 'running' : 'failed',
+            progress: get().sceneMap[id]?.generationProgress ?? 0,
+            error: message,
+            metadata: {
+              taskId: get().sceneMap[id]?.generationTaskId,
+              model: get().sceneMap[id]?.generationModel,
+            },
+          });
+        }
         await persistStoryboard(get);
         persistLayout(get);
+      } finally {
+        clearGenerationAbortController(id);
       }
     },
 
     generateAllScenes: async () => {
       if (get().isGeneratingAll) return;
+
+      const pending = get().getScenes().filter(sceneNeedsGeneration);
+      if (pending.length === 0) return;
+
+      batchGenerationCancelled = false;
       set((s) => { s.isGeneratingAll = true; });
 
-      const pending = get().getScenes().filter(
-        (sc) => sc.status === 'idle' || sc.status === 'failed' || sc.status === 'queued',
-      );
-
-      for (const sc of pending) {
-        set((s) => {
-          if (s.sceneMap[sc.id]) {
-            s.sceneMap[sc.id].status = 'queued';
-            delete s.hiddenNodeIds[outputNodeId(sc.id)];
-            s.shownOutputSceneIds[sc.id] = true;
-          }
-        });
+      try {
+        await Promise.all(pending.map((sc) => get().generateScene(sc.id)));
+      } finally {
+        set((s) => { s.isGeneratingAll = false; });
       }
+    },
+
+    cancelAllGenerations: async () => {
+      batchGenerationCancelled = true;
+      abortAllGenerationControllers();
+
+      set((s) => {
+        s.isGeneratingAll = false;
+        for (const sceneId of s.sceneOrder) {
+          const sc = s.sceneMap[sceneId];
+          if (!sc) continue;
+          if (!['generating', 'queued', 'regenerating'].includes(sc.status)) continue;
+
+          const hadOutput = sceneHasGeneratedOutput(sc);
+          if (hadOutput) {
+            sc.status = 'completed';
+          } else {
+            sc.status = 'idle';
+            s.hiddenNodeIds[outputNodeId(sceneId)] = true;
+            delete s.shownOutputSceneIds[sceneId];
+          }
+          sc.generationProgress = undefined;
+          sc.generationStartedAt = undefined;
+          sc.generationTaskId = undefined;
+          sc.generationModel = undefined;
+          sc.generationError = undefined;
+        }
+        s.hiddenNodeIds[finalOutputNodeId] = true;
+      });
+
       persistLayout(get);
       await persistStoryboard(get);
 
-      for (const sc of pending) {
-        await get().generateScene(sc.id);
+      const project = useProjectStore.getState().getCurrentProject();
+      if (project) {
+        const jobs = await storage.getJobs(project.id);
+        for (const job of jobs) {
+          const record = job as { id: string; status: string };
+          if (record.status === 'running') {
+            await storage.saveJob({
+              ...job,
+              status: 'cancelled',
+              error: 'Cancelled by user',
+            });
+          }
+        }
       }
 
-      set((s) => { s.isGeneratingAll = false; });
+      batchGenerationCancelled = false;
     },
 
     clearSceneOutput: async (id) => {
@@ -460,6 +636,10 @@ export const useWorkflowStore = create<WorkflowState>()(
         const sc = s.sceneMap[id];
         sc.status = 'idle';
         sc.generationProgress = undefined;
+        sc.generationStartedAt = undefined;
+        sc.generationTaskId = undefined;
+        sc.generationModel = undefined;
+        sc.generationError = undefined;
         sc.generatedStartFrameUrl = undefined;
         sc.generatedEndFrameUrl = undefined;
         sc.generatedVideoUrl = undefined;
@@ -474,13 +654,21 @@ export const useWorkflowStore = create<WorkflowState>()(
     retrySceneGeneration: async (id) => {
       const scene = get().sceneMap[id];
       if (!scene) return;
-      if (scene.status === 'generating' || scene.status === 'queued') return;
+      if ((scene.status === 'generating' || scene.status === 'queued') && !scene.generationTaskId) return;
+      if (scene.generationTaskId) {
+        await get().generateScene(id, { resume: true });
+        return;
+      }
       await get().generateScene(id);
     },
 
     resumePendingGenerations: async () => {
       const interrupted = get().getScenes().filter(
-        (sc) => sc.status === 'generating' || sc.status === 'regenerating' || sc.status === 'queued',
+        (sc) =>
+          sc.status === 'generating' ||
+          sc.status === 'regenerating' ||
+          sc.status === 'queued' ||
+          (sc.generationTaskId && sc.status !== 'completed'),
       );
       if (interrupted.length === 0) return;
 
@@ -489,14 +677,15 @@ export const useWorkflowStore = create<WorkflowState>()(
           if (s.sceneMap[sc.id]) {
             delete s.hiddenNodeIds[outputNodeId(sc.id)];
             s.shownOutputSceneIds[sc.id] = true;
+            s.hiddenNodeIds[finalOutputNodeId] = true;
           }
         });
       }
       persistLayout(get);
 
-      for (const sc of interrupted) {
-        await get().generateScene(sc.id, { resume: true });
-      }
+      await Promise.all(
+        interrupted.map((sc) => get().generateScene(sc.id, { resume: true })),
+      );
     },
 
     updateScenePrompt: (id, newPrompt) => {

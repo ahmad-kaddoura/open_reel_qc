@@ -1,7 +1,7 @@
 'use client';
 
 import { useProjectStore } from '@/features/project/store';
-import { useSettingsStore } from '@/features/settings/store';
+import { useWorkflowStore, isProjectGenerating } from '@/features/workflow';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,10 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
-import { Plus, Search, Film, Settings, Palette, FolderOpen, Trash2, MoreHorizontal, Clapperboard, Pencil, BarChart3 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Plus, Search, Film, Settings, Palette, FolderOpen, Trash2, MoreHorizontal, Clapperboard, Pencil, BarChart3, Loader2, Square } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
-import { PROJECT_PHASES } from './phase-config';
+import { useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 
 type AppView = 'project' | 'settings' | 'brandkit' | 'assets' | 'usage';
@@ -35,8 +38,101 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-emerald-500', archived: 'bg-muted-foreground',
 };
 
+function ProjectGeneratingControl({
+  isCurrentProject,
+  onStop,
+}: {
+  isCurrentProject: boolean;
+  onStop: () => void;
+}) {
+  return (
+    <AlertDialog>
+      <div
+        className="group/stop absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="absolute inset-0 flex items-center justify-center rounded transition-opacity group-hover/stop:opacity-0">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+        </div>
+        <AlertDialogTrigger asChild>
+          <button
+            type="button"
+            title="Stop generation"
+            className="absolute inset-0 flex items-center justify-center rounded opacity-0 group-hover/stop:opacity-100 hover:bg-red-500/10 transition-opacity"
+          >
+            <Square className="w-3 h-3 text-red-400 fill-red-400" />
+          </button>
+        </AlertDialogTrigger>
+      </div>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Stop all generation?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isCurrentProject
+              ? 'This will cancel every in-progress scene in this project. Completed outputs will be kept.'
+              : 'Open this project first to stop its active generation.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep generating</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!isCurrentProject}
+            className="bg-red-600 hover:bg-red-600/90"
+            onClick={onStop}
+          >
+            Stop everything
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function ProjectRowMenu({
+  onRename,
+  onDelete,
+}: {
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-opacity"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(); }}>
+          <Pencil className="w-3.5 h-3.5 mr-2" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="text-red-400 focus:text-red-400"
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProps) {
   const { projects, currentProjectId, createProject, openProject, deleteProject, updateProject, isLoading } = useProjectStore();
+  const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
+  const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
+  const sceneMap = useWorkflowStore((s) => s.sceneMap);
+  const cancelAllGenerations = useWorkflowStore((s) => s.cancelAllGenerations);
+
+  const liveScenes = useMemo(
+    () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
+    [sceneMap, sceneOrder],
+  );
   const [search, setSearch] = useState('');
   const [newName, setNewName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -172,7 +268,14 @@ export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProp
                 {search ? 'No matching projects' : 'No projects yet'}
               </div>
             )}
-            {filtered.map((project) => (
+            {filtered.map((project) => {
+              const generating = isProjectGenerating(project, {
+                isCurrentProject: project.id === currentProjectId,
+                isGeneratingAll,
+                liveScenes,
+              });
+
+              return (
               <div key={project.id}>
                 <div
                   onClick={() => { openProject(project.id); onNavigate('project'); }}
@@ -189,41 +292,27 @@ export function AppSidebar({ collapsed, onNavigate, activeView }: AppSidebarProp
                     <div className="text-sm font-medium truncate">{project.name}</div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
-                        {PHASE_LABELS[project.currentPhase] || project.currentPhase}
+                        {generating ? 'Generating' : (PHASE_LABELS[project.currentPhase] || project.currentPhase)}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground truncate">
                         {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}
                       </span>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-opacity"
-                      >
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem
-                        onClick={(e) => { e.stopPropagation(); openRenameDialog(project.id, project.name); }}
-                      >
-                        <Pencil className="w-3.5 h-3.5 mr-2" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
-                        className="text-red-400 focus:text-red-400"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {generating && project.id === currentProjectId ? (
+                    <ProjectGeneratingControl
+                      isCurrentProject
+                      onStop={() => { void cancelAllGenerations(); }}
+                    />
+                  ) : !generating ? (
+                    <ProjectRowMenu
+                      onRename={() => openRenameDialog(project.id, project.name)}
+                      onDelete={() => handleDelete(project.id)}
+                    />
+                  ) : null}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         )}
       </ScrollArea>
