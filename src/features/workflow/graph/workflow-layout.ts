@@ -153,12 +153,20 @@ function inputStackMetrics(scenes: Scene[], baseY: number) {
 
 export type NodePositions = Record<string, { x: number; y: number }>;
 export type NodeColorStyles = Record<string, { border?: string; line?: string }>;
+export type WorkflowNote = {
+  id: string;
+  title?: string;
+  text: string;
+  width?: number;
+  height?: number;
+};
 
 export type WorkflowLayout = {
   positions: NodePositions;
   hiddenNodes?: string[];
   shownOutputs?: string[];
   nodeColors?: NodeColorStyles;
+  notes?: WorkflowNote[];
 };
 
 function isLegacyPositions(value: unknown): value is NodePositions {
@@ -177,6 +185,7 @@ function normalizeLayout(raw: unknown): WorkflowLayout | null {
       hiddenNodes: layout.hiddenNodes ?? [],
       shownOutputs: layout.shownOutputs ?? [],
       nodeColors: layout.nodeColors ?? {},
+      notes: layout.notes ?? [],
     };
   }
   return null;

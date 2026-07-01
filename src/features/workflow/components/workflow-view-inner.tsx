@@ -36,6 +36,7 @@ import { ParametersNode } from './nodes/params-node';
 import { ScriptNode } from './nodes/script-node';
 import { FramesNode } from './nodes/frames-node';
 import { AssetNode } from './nodes/asset-node';
+import { NoteNode } from './nodes/note-node';
 import { buildWorkflowGraph } from '../graph/workflow-graph';
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
@@ -48,6 +49,7 @@ const nodeTypes: NodeTypes = {
   script: ScriptNode,
   frames: FramesNode,
   asset: AssetNode,
+  note: NoteNode,
 };
 
 const backgroundVariantMap = {
@@ -121,6 +123,7 @@ export function WorkflowViewInner() {
   const nodeColorStyles = useWorkflowStore((s) => s.nodeColorStyles);
   const hiddenNodeIds = useWorkflowStore((s) => s.hiddenNodeIds);
   const shownOutputSceneIds = useWorkflowStore((s) => s.shownOutputSceneIds);
+  const noteNodes = useWorkflowStore((s) => s.noteNodes);
   const updateScene = useWorkflowStore((s) => s.updateScene);
   const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
   const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
@@ -185,8 +188,9 @@ export function WorkflowViewInner() {
       hiddenNodeIds,
       currentProject?.creativePlan?.reusableAssets ?? [],
       nodeColorStyles,
+      noteNodes,
     ),
-    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles],
+    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles, noteNodes],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
@@ -231,6 +235,7 @@ export function WorkflowViewInner() {
       projectName: currentProject?.name ?? 'Workflow',
       project: currentProject ?? null,
       scenes,
+      notes: noteNodes,
       reusableAssets: currentProject?.creativePlan?.reusableAssets ?? [],
       layout: {
         positions: { ...nodePositions, ...canvasPositions },
@@ -244,7 +249,7 @@ export function WorkflowViewInner() {
         edges,
       },
     };
-  }, [currentProject, currentProjectId, edges, hiddenNodeIds, nodeColorStyles, nodePositions, nodes, scenes, shownOutputSceneIds]);
+  }, [currentProject, currentProjectId, edges, hiddenNodeIds, nodeColorStyles, nodePositions, nodes, noteNodes, scenes, shownOutputSceneIds]);
 
   const handleExportWorkflow = useCallback((format: 'json' | 'xml') => {
     const snapshot = buildExportSnapshot();
@@ -311,6 +316,7 @@ export function WorkflowViewInner() {
               if (node.type === 'script') return 'hsl(270 60% 60%)';
               if (node.type === 'frames') return 'hsl(173 58% 45%)';
               if (node.type === 'asset') return 'hsl(188 86% 53%)';
+              if (node.type === 'note') return 'hsl(48 96% 53%)';
               return 'hsl(var(--primary))';
             }}
             nodeBorderRadius={8}

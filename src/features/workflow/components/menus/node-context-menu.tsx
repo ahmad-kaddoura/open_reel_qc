@@ -131,6 +131,10 @@ export function useWorkflowNodeContextMenu() {
     updateScene(scene.id, { prompt: enhanced });
   };
 
+  const openNoteEditor = (nodeId: string) => {
+    window.dispatchEvent(new CustomEvent('workflow:open-note-editor', { detail: { id: nodeId } }));
+  };
+
   const confirmDeleteNode = () => {
     if (!confirmDelete) return;
     removeWorkflowNode(confirmDelete.node.id);
@@ -197,6 +201,11 @@ export function useWorkflowNodeContextMenu() {
             Open {nodeLabel(menu.node.type)}
           </MenuItem>
           <MenuItem onClick={() => runAndClose(() => duplicateScene(activeScene.id))}>Duplicate Scene</MenuItem>
+        </>
+      )}
+      {menu.node.type === 'note' && (
+        <>
+          <MenuItem onClick={() => runAndClose(() => openNoteEditor(menu.node.id))}>Edit</MenuItem>
         </>
       )}
       <Separator />

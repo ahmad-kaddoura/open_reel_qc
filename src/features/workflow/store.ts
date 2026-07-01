@@ -18,6 +18,7 @@ import {
   allScenesReadyForFinalOutput,
   finalOutputNodeId,
   type NodeColorStyles,
+  type WorkflowNote,
 } from './graph/workflow-layout';
 import { nodeIdsForScene, sceneIdFromNodeId } from './graph/workflow-node-utils';
 import { nodeIdForKind, type WorkflowNodeKind } from './graph/workflow-node-catalog';
@@ -52,6 +53,7 @@ function persistLayout(get: () => WorkflowState) {
     hiddenNodes: Object.keys(get().hiddenNodeIds),
     shownOutputs: Object.keys(get().shownOutputSceneIds),
     nodeColors: get().nodeColorStyles,
+    notes: get().noteNodes,
   });
 }
 
@@ -185,6 +187,7 @@ interface WorkflowState {
   nodeColorStyles: NodeColorStyles;
   hiddenNodeIds: Record<string, true>;
   shownOutputSceneIds: Record<string, true>;
+  noteNodes: WorkflowNote[];
   layoutProjectId: string | null;
 
   // Scene CRUD
@@ -192,6 +195,7 @@ interface WorkflowState {
   addNodeAt: (kind: WorkflowNodeKind, position: { x: number; y: number }, sceneId?: string) => string;
   removeScene: (id: string) => void;
   removeWorkflowNode: (nodeId: string) => void;
+  updateNoteNode: (id: string, updates: Partial<Omit<WorkflowNote, 'id'>>) => void;
   updateScene: (id: string, updates: Partial<Scene>) => void;
   reorderScenes: (newOrder: string[]) => void;
   duplicateScene: (id: string) => void;
@@ -233,6 +237,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     nodeColorStyles: {},
     hiddenNodeIds: {},
     shownOutputSceneIds: {},
+    noteNodes: [],
     layoutProjectId: null,
     isGeneratingAll: false,
 
@@ -251,8 +256,23 @@ export const useWorkflowStore = create<WorkflowState>()(
     },
 
     addNodeAt: (kind, position, sceneId) => {
+      if (kind === 'note') {
+        const nodeId = `note-${nanoid()}`;
+        set((s) => {
+          s.noteNodes.push({
+            id: nodeId,
+            title: 'Text (Notes)',
+            text: '',
+            width: 240,
+            height: 170,
+          });
+          s.nodePositions[nodeId] = position;
+        });
+        persistLayout(get);
+        return nodeId;
+      }
+
       let sid = sceneId;
-      const isNewScene = !sid;
 
       if (!sid) {
         const scenes = get().getScenes();
@@ -301,14 +321,27 @@ export const useWorkflowStore = create<WorkflowState>()(
       const sceneId = sceneIdFromNodeId(nodeId, get().sceneOrder);
 
       set((s) => {
-        s.hiddenNodeIds[nodeId] = true;
+        if (nodeId.startsWith('note-')) {
+          s.noteNodes = s.noteNodes.filter((note) => note.id !== nodeId);
+        } else {
+          s.hiddenNodeIds[nodeId] = true;
+        }
         delete s.nodePositions[nodeId];
+        delete s.nodeColorStyles[nodeId];
       });
 
       if (nodeId.startsWith('output-') && sceneId) {
         get().clearSceneOutput(sceneId);
       }
 
+      persistLayout(get);
+    },
+
+    updateNoteNode: (id, updates) => {
+      set((s) => {
+        const note = s.noteNodes.find((item) => item.id === id);
+        if (note) Object.assign(note, updates);
+      });
       persistLayout(get);
     },
 
@@ -720,6 +753,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     buildFromStoryboard: (scenes) => {
       set((s) => {
         s.sceneMap = {};
+        s.noteNodes = [];
         s.sceneOrder = scenes.map((sc) => {
           s.sceneMap[sc.id] = sc;
           return sc.id;
@@ -740,6 +774,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         });
         s.nodePositions = saved?.positions ?? {};
         s.nodeColorStyles = saved?.nodeColors ?? {};
+        s.noteNodes = saved?.notes ?? [];
         s.hiddenNodeIds = Object.fromEntries(
           (saved?.hiddenNodes ?? []).map((id) => [id, true as const]),
         );
@@ -758,6 +793,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         s.layoutProjectId = projectId;
         s.nodePositions = saved?.positions ?? {};
         s.nodeColorStyles = saved?.nodeColors ?? {};
+        s.noteNodes = saved?.notes ?? [];
         s.hiddenNodeIds = Object.fromEntries(
           (saved?.hiddenNodes ?? []).map((id) => [id, true as const]),
         );
@@ -798,7 +834,12 @@ export const useWorkflowStore = create<WorkflowState>()(
       const reusableAssets = useProjectStore.getState().getCurrentProject()?.creativePlan?.reusableAssets ?? [];
       const positions = computeAutoLayout(scenes, reusableAssets);
       set((s) => {
-        s.nodePositions = positions;
+        const notePositions = Object.fromEntries(
+          s.noteNodes
+            .map((note) => [note.id, s.nodePositions[note.id]] as const)
+            .filter(([, position]) => Boolean(position)),
+        );
+        s.nodePositions = { ...positions, ...notePositions };
       });
       persistLayout(get);
     },

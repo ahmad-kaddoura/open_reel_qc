@@ -33,6 +33,7 @@ export function nodeLabel(nodeType: string | undefined): string {
     case 'output': return 'Output';
     case 'scene': return 'Scene';
     case 'asset': return 'Asset';
+    case 'note': return 'Text (Notes)';
     default: return 'Node';
   }
 }

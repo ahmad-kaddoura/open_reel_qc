@@ -1,6 +1,6 @@
-import { Clapperboard, SlidersHorizontal, FileText, Images, type LucideIcon } from 'lucide-react';
+import { Clapperboard, SlidersHorizontal, FileText, Images, StickyNote, type LucideIcon } from 'lucide-react';
 
-export type WorkflowNodeKind = 'scene' | 'parameters' | 'script' | 'frames';
+export type WorkflowNodeKind = 'scene' | 'parameters' | 'script' | 'frames' | 'note';
 
 export type AddNodeOption = {
   kind: WorkflowNodeKind;
@@ -44,6 +44,14 @@ export const ADD_NODE_OPTIONS: AddNodeOption[] = [
     icon: Images,
     color: 'text-teal-400',
   },
+  {
+    kind: 'note',
+    label: 'Text (Notes)',
+    description: 'Add a freeform sticky note to the canvas',
+    keywords: ['text', 'note', 'notes', 'sticky', 'comment', 'annotation'],
+    icon: StickyNote,
+    color: 'text-yellow-300',
+  },
 ];
 
 export function nodeIdForKind(kind: WorkflowNodeKind, sceneId: string): string {
@@ -56,6 +64,8 @@ export function nodeIdForKind(kind: WorkflowNodeKind, sceneId: string): string {
       return `script-${sceneId}`;
     case 'frames':
       return `frames-${sceneId}`;
+    case 'note':
+      return `note-${sceneId}`;
   }
 }
 

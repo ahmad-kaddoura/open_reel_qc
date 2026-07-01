@@ -15,6 +15,7 @@ import {
   computeAutoLayout,
   type NodePositions,
   type NodeColorStyles,
+  type WorkflowNote,
 } from './workflow-layout';
 
 export {
@@ -59,6 +60,7 @@ export function buildWorkflowGraph(
   hiddenNodeIds: Record<string, true> = {},
   reusableAssets: ReusableAssetPlan[] = [],
   nodeColorStyles: NodeColorStyles = {},
+  notes: WorkflowNote[] = [],
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -69,6 +71,20 @@ export function buildWorkflowGraph(
   const link = (source: string, target: string) => visible(source) && visible(target);
   const workflowStyle = (id: string) => nodeColorStyles[id] ?? {};
   const edgeStyle = (source: string, target: string, fallback: string) => nodeColorStyles[source]?.line ?? nodeColorStyles[target]?.line ?? fallback;
+
+  notes.forEach((note, idx) => {
+    if (!visible(note.id)) return;
+    nodes.push({
+      id: note.id,
+      type: 'note',
+      position: savedPositions?.[note.id] ?? { x: 80, y: 80 + idx * 180 },
+      data: { ...note, workflowStyle: workflowStyle(note.id) },
+      style: {
+        width: note.width ?? 240,
+        height: note.height ?? 170,
+      },
+    });
+  });
 
   reusableAssets.forEach((asset, idx) => {
     if (!visible(asset.id)) return;
