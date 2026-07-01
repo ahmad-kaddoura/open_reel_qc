@@ -83,9 +83,9 @@ function SceneOutputNode({ sceneId }: { sceneId: string }) {
           <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Output</span>
         </div>
 
-        <div className="h-[148px] bg-muted/30 relative overflow-hidden">
+        <div className="bg-muted/30 relative">
           {isGenerating || isQueued ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-3 bg-blue-500/5">
+            <div className="flex min-h-[148px] flex-col items-center justify-center gap-1.5 p-3 bg-blue-500/5">
               <Loader2 className="w-7 h-7 text-blue-400 animate-spin" />
               <span className="text-[10px] text-blue-400 font-medium">
                 {isQueued ? 'Queued…' : 'Generating video…'}
@@ -112,7 +112,7 @@ function SceneOutputNode({ sceneId }: { sceneId: string }) {
             isVideo ? (
               <video
                 src={previewUrl}
-                className="w-full h-full object-cover bg-muted/30"
+                className="block w-full h-auto bg-muted/30"
                 muted
                 playsInline
                 loop
@@ -120,10 +120,10 @@ function SceneOutputNode({ sceneId }: { sceneId: string }) {
                 poster={scene.startFrameUrl ?? scene.generatedStartFrameUrl}
               />
             ) : (
-              <img src={previewUrl} alt={scene.title} className="w-full h-full object-cover bg-muted/30" />
+              <img src={previewUrl} alt={scene.title} className="block w-full h-auto bg-muted/30" />
             )
           ) : isFailed ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-red-400 bg-red-500/5 p-3">
+            <div className="flex min-h-[120px] flex-col items-center justify-center gap-1.5 text-red-400 bg-red-500/5 p-3">
               <AlertCircle className="w-6 h-6" />
               <span className="text-[10px] font-medium">Failed</span>
               {scene.generationError && (

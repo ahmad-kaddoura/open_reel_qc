@@ -78,14 +78,14 @@ function SceneNodeComponent({ data, id }: NodeProps) {
           <StatusBadge status={scene.status} />
         </div>
 
-        <div className="h-[80px] bg-muted/30 relative overflow-hidden">
+        <div className="bg-muted/30 relative">
           {refPreview ? (
             <>
-              <img src={refPreview} alt="Reference" className="w-full h-full object-cover opacity-80" />
+              <img src={refPreview} alt="Reference" className="block w-full h-auto opacity-80" />
               <div className="absolute bottom-1 left-1.5 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded">Ref</div>
             </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="flex min-h-[80px] w-full items-center justify-center">
               <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
             </div>
           )}

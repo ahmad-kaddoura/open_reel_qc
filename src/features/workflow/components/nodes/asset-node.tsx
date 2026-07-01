@@ -102,11 +102,11 @@ function AssetNodeComponent({ data }: NodeProps) {
 
         <div className="p-3 space-y-2">
           {asset.generatedImageUrl ? (
-            <div className="overflow-hidden rounded-md border border-border/50 bg-background/30">
-              <img src={asset.generatedImageUrl} alt={asset.name} className="aspect-[9/16] w-full object-cover" />
+            <div className="rounded-md border border-border/50 bg-background/30">
+              <img src={asset.generatedImageUrl} alt={asset.name} className="block w-full h-auto" />
             </div>
           ) : (
-            <div className="flex aspect-[9/16] items-center justify-center rounded-md border border-border/50 bg-muted/30 px-3 text-center text-[10px] text-muted-foreground">
+            <div className="flex min-h-[120px] items-center justify-center rounded-md border border-border/50 bg-muted/30 px-3 text-center text-[10px] text-muted-foreground">
               {asset.generationStatus === 'failed'
                 ? `Qwen image failed${asset.generationError ? `: ${asset.generationError.slice(0, 80)}` : ''}`
                 : 'Pending Qwen image generation'}

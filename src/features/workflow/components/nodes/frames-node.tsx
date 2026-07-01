@@ -39,13 +39,13 @@ function FrameSlot({
     <div>
       <span className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</span>
       <div
-        className="mt-0.5 h-[52px] rounded-md border border-dashed border-border bg-muted/20 relative overflow-hidden cursor-pointer hover:border-teal-500/50 transition-colors"
+        className={`mt-0.5 rounded-md border border-dashed border-border bg-muted/20 relative cursor-pointer hover:border-teal-500/50 transition-colors ${url ? '' : 'h-[52px]'}`}
         onClick={() => !url && inputRef.current?.click()}
       >
         {url ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={label} className="w-full h-full object-cover" />
+            <img src={url} alt={label} className="block w-full h-auto" />
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onClear(); }}
