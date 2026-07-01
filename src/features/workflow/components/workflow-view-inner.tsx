@@ -13,6 +13,7 @@ import {
   type NodeTypes,
   type ReactFlowInstance,
   type Node as FlowNode,
+  type OnNodeDrag,
   BackgroundVariant,
   Panel,
 } from '@xyflow/react';
@@ -21,8 +22,14 @@ import { useWorkflowStore } from '@/features/workflow/store';
 import { useProjectStore } from '@/features/project/store';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Play, Loader2, AlignHorizontalSpaceAround } from 'lucide-react';
+import { Play, Loader2, AlignHorizontalSpaceAround, ChevronDown, Download, FileCode2, FileJson } from 'lucide-react';
 import { SceneNode } from './nodes/scene-node';
 import { OutputNode } from './nodes/output-node';
 import { ParametersNode } from './nodes/params-node';
@@ -43,11 +50,70 @@ const nodeTypes: NodeTypes = {
   asset: AssetNode,
 };
 
+function sanitizeFilename(value: string) {
+  return value.trim().replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'workflow';
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function xmlTagName(key: string) {
+  const safe = key.replace(/[^A-Za-z0-9_.-]/g, '_');
+  return /^[A-Za-z_]/.test(safe) ? safe : `_${safe}`;
+}
+
+function valueToXml(key: string, value: unknown, depth = 0): string {
+  const tag = xmlTagName(key);
+  const pad = '  '.repeat(depth);
+
+  if (value === null || value === undefined) {
+    return `${pad}<${tag} />`;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return `${pad}<${tag} />`;
+    const children = value.map((item) => valueToXml('item', item, depth + 1)).join('\n');
+    return `${pad}<${tag}>\n${children}\n${pad}</${tag}>`;
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return `${pad}<${tag} />`;
+    const children = entries.map(([childKey, childValue]) => valueToXml(childKey, childValue, depth + 1)).join('\n');
+    return `${pad}<${tag}>\n${children}\n${pad}</${tag}>`;
+  }
+
+  return `${pad}<${tag}>${escapeXml(String(value))}</${tag}>`;
+}
+
+function workflowSnapshotToXml(snapshot: Record<string, unknown>) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${valueToXml('videoforgeWorkflowCanvas', snapshot)}`;
+}
+
 export function WorkflowViewInner() {
   const sceneMap = useWorkflowStore((s) => s.sceneMap);
   const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
   const nodePositions = useWorkflowStore((s) => s.nodePositions);
   const hiddenNodeIds = useWorkflowStore((s) => s.hiddenNodeIds);
+  const shownOutputSceneIds = useWorkflowStore((s) => s.shownOutputSceneIds);
   const updateScene = useWorkflowStore((s) => s.updateScene);
   const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
   const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
@@ -135,7 +201,7 @@ export function WorkflowViewInner() {
     return () => { delete (window as any).__sceneNodeUpdate; };
   }, [handleNodeDataChange]);
 
-  const onNodeDragStop = useCallback((_: React.MouseEvent, node: FlowNode) => {
+  const onNodeDragStop = useCallback<OnNodeDrag>((_, node: FlowNode) => {
     setNodePosition(node.id, node.position);
   }, [setNodePosition]);
 
@@ -143,6 +209,41 @@ export function WorkflowViewInner() {
     applyAutoLayout();
     setTimeout(() => rfRef.current?.fitView({ padding: 0.3, duration: 300 }), 80);
   }, [applyAutoLayout]);
+
+  const buildExportSnapshot = useCallback(() => {
+    const viewport = rfRef.current?.getViewport();
+    const canvasPositions = Object.fromEntries(nodes.map((node) => [node.id, node.position]));
+    return {
+      schema: 'videoforge.workflow.canvas',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      projectId: currentProject?.id ?? currentProjectId ?? null,
+      projectName: currentProject?.name ?? 'Workflow',
+      project: currentProject ?? null,
+      scenes,
+      reusableAssets: currentProject?.creativePlan?.reusableAssets ?? [],
+      layout: {
+        positions: { ...nodePositions, ...canvasPositions },
+        hiddenNodes: Object.keys(hiddenNodeIds),
+        shownOutputs: Object.keys(shownOutputSceneIds),
+        viewport: viewport ?? null,
+      },
+      graph: {
+        nodes,
+        edges,
+      },
+    };
+  }, [currentProject, currentProjectId, edges, hiddenNodeIds, nodePositions, nodes, scenes, shownOutputSceneIds]);
+
+  const handleExportWorkflow = useCallback((format: 'json' | 'xml') => {
+    const snapshot = buildExportSnapshot();
+    const baseName = sanitizeFilename(`${snapshot.projectName}-workflow-canvas`);
+    if (format === 'json') {
+      downloadTextFile(`${baseName}.json`, JSON.stringify(snapshot, null, 2), 'application/json;charset=utf-8');
+      return;
+    }
+    downloadTextFile(`${baseName}.xml`, workflowSnapshotToXml(snapshot), 'application/xml;charset=utf-8');
+  }, [buildExportSnapshot]);
 
   const viewScene = outputViewSceneId ? sceneMap[outputViewSceneId] : null;
   const viewUrl = viewScene?.generatedVideoUrl ?? viewScene?.generatedStartFrameUrl;
@@ -194,6 +295,25 @@ export function WorkflowViewInner() {
             <Button variant="outline" size="sm" onClick={handleAutoLayout} className="gap-1.5 shadow-lg bg-card border-border">
               <AlignHorizontalSpaceAround className="w-3.5 h-3.5" /> Auto Layout
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 shadow-lg bg-card border-border">
+                  <Download className="w-3.5 h-3.5" />
+                  Export
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-40">
+                <DropdownMenuItem onClick={() => handleExportWorkflow('json')} className="gap-2">
+                  <FileJson className="w-3.5 h-3.5" />
+                  JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportWorkflow('xml')} className="gap-2">
+                  <FileCode2 className="w-3.5 h-3.5" />
+                  XML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </Panel>
 
           <Panel position="top-right">

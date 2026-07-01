@@ -762,7 +762,8 @@ export const useWorkflowStore = create<WorkflowState>()(
 
     applyAutoLayout: () => {
       const scenes = get().getScenes();
-      const positions = computeAutoLayout(scenes);
+      const reusableAssets = useProjectStore.getState().getCurrentProject()?.creativePlan?.reusableAssets ?? [];
+      const positions = computeAutoLayout(scenes, reusableAssets);
       set((s) => {
         s.nodePositions = positions;
       });

@@ -1,4 +1,4 @@
-import type { Scene, SceneStatus } from '@/core/types';
+import type { ReusableAssetPlan, Scene, SceneStatus } from '@/core/types';
 
 export const outputNodeId = (sceneId: string) => `output-${sceneId}`;
 export const finalOutputNodeId = 'output-final';
@@ -24,14 +24,19 @@ export function allScenesReadyForFinalOutput(scenes: Scene[]): boolean {
 }
 
 export const LAYOUT = {
+  ASSET_WIDTH: 220,
   PARAMETERS_WIDTH: 180,
   SCRIPT_WIDTH: 220,
   FRAMES_WIDTH: 180,
   SCENE_WIDTH: 240,
   OUTPUT_WIDTH: 220,
-  COL_GAP: 40,
-  GROUP_GAP: 80,
-  INPUT_STACK_GAP: 200,
+  COL_GAP: 56,
+  GROUP_GAP: 120,
+  INPUT_STACK_GAP: 188,
+  ASSET_STACK_GAP: 190,
+  SCENE_LANE_GAP: 124,
+  TOP_PADDING: 80,
+  LEFT_PADDING: 80,
 } as const;
 
 export type NodePositions = Record<string, { x: number; y: number }>;
@@ -88,14 +93,38 @@ export function saveLayoutToStorage(projectId: string, layout: WorkflowLayout) {
   localStorage.setItem(layoutStorageKey(projectId), JSON.stringify(layout));
 }
 
-/** Default positions: Parameters, Script, Frames on left → Scene → Output. */
-export function computeAutoLayout(scenes: Scene[]): NodePositions {
+/** Default positions: Assets → per-scene inputs → Scene → Output → Final output. */
+export function computeAutoLayout(
+  scenes: Scene[],
+  reusableAssets: ReusableAssetPlan[] = [],
+): NodePositions {
   const positions: NodePositions = {};
-  let x = 80;
-  const baseY = 80;
+  const sceneStartX = reusableAssets.length > 0
+    ? LAYOUT.LEFT_PADDING + LAYOUT.ASSET_WIDTH + LAYOUT.GROUP_GAP
+    : LAYOUT.LEFT_PADDING;
+  const hasTallAssetStack = reusableAssets.length > 2;
+  const baseY = LAYOUT.TOP_PADDING + (hasTallAssetStack ? 48 : 0);
+  const sceneLaneHeight = LAYOUT.INPUT_STACK_GAP * 2 + LAYOUT.SCENE_LANE_GAP;
+
+  reusableAssets.forEach((asset, idx) => {
+    const column = Math.floor(idx / 4);
+    const row = idx % 4;
+    positions[asset.id] = {
+      x: LAYOUT.LEFT_PADDING + column * (LAYOUT.ASSET_WIDTH + LAYOUT.COL_GAP),
+      y: baseY + row * LAYOUT.ASSET_STACK_GAP,
+    };
+  });
 
   scenes.forEach((scene, idx) => {
-    const y = baseY + (idx % 2) * 40;
+    const x = sceneStartX + idx * (
+      LAYOUT.PARAMETERS_WIDTH +
+      LAYOUT.COL_GAP +
+      LAYOUT.SCENE_WIDTH +
+      LAYOUT.COL_GAP +
+      LAYOUT.OUTPUT_WIDTH +
+      LAYOUT.GROUP_GAP
+    );
+    const y = baseY + (idx % 2) * 44;
     const hasOutput = shouldShowOutputNode(scene);
 
     positions[parametersNodeId(scene.id)] = { x, y };
@@ -113,14 +142,12 @@ export function computeAutoLayout(scenes: Scene[]): NodePositions {
       };
     }
 
-    const groupW =
-      LAYOUT.PARAMETERS_WIDTH +
-      LAYOUT.COL_GAP +
-      LAYOUT.SCENE_WIDTH +
-      LAYOUT.COL_GAP +
-      (hasOutput ? LAYOUT.OUTPUT_WIDTH + LAYOUT.COL_GAP : 0);
-
-    x += groupW + LAYOUT.GROUP_GAP;
+    if (!hasOutput) {
+      positions[outputNodeId(scene.id)] = {
+        x: sceneX + LAYOUT.SCENE_WIDTH + LAYOUT.COL_GAP,
+        y: sceneY + 4,
+      };
+    }
   });
 
   if (scenes.length > 0 && allScenesReadyForFinalOutput(scenes)) {
@@ -128,7 +155,14 @@ export function computeAutoLayout(scenes: Scene[]): NodePositions {
     const lastScenePos = positions[lastScene.id] ?? { x: 480, y: baseY + LAYOUT.INPUT_STACK_GAP };
     positions[finalOutputNodeId] = {
       x: lastScenePos.x + LAYOUT.SCENE_WIDTH + LAYOUT.COL_GAP + LAYOUT.OUTPUT_WIDTH + LAYOUT.GROUP_GAP,
-      y: baseY + LAYOUT.INPUT_STACK_GAP,
+      y: baseY + LAYOUT.INPUT_STACK_GAP + Math.min(1, scenes.length - 1) * 44,
+    };
+  }
+
+  if (scenes.length === 0 && reusableAssets.length > 0) {
+    positions[finalOutputNodeId] = {
+      x: sceneStartX,
+      y: baseY + sceneLaneHeight,
     };
   }
 

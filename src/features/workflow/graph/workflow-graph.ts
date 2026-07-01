@@ -60,7 +60,7 @@ export function buildWorkflowGraph(
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const defaults = computeAutoLayout(scenes);
+  const defaults = computeAutoLayout(scenes, reusableAssets);
   const pos = (id: string) => resolvePosition(id, savedPositions, defaults);
   const onEdge = edgeLabelPlacement === 'on-edge';
   const visible = (id: string) => !hiddenNodeIds[id];
@@ -71,7 +71,7 @@ export function buildWorkflowGraph(
     nodes.push({
       id: asset.id,
       type: 'asset',
-      position: savedPositions?.[asset.id] ?? defaults[asset.id] ?? { x: -220, y: 80 + idx * 180 },
+      position: savedPositions?.[asset.id] ?? defaults[asset.id] ?? { x: 80, y: 80 + idx * 190 },
       data: asset as unknown as Record<string, unknown>,
     });
   });
