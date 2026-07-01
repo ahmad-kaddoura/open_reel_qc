@@ -13,6 +13,7 @@ import {
   type ReactFlowInstance,
   type Node as FlowNode,
   type OnNodeDrag,
+  type IsValidConnection,
   BackgroundVariant,
   Panel,
 } from '@xyflow/react';
@@ -46,6 +47,7 @@ import { ADD_NODE_OPTIONS, type WorkflowNodeKind } from '../graph/workflow-node-
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
 import { useSettingsStore } from '@/features/settings/store';
+import { useToast } from '@/hooks/use-toast';
 
 type FlowPoint = { x: number; y: number };
 
@@ -172,6 +174,96 @@ function workflowSnapshotToXml(snapshot: Record<string, unknown>) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n${valueToXml('videoforgeWorkflowCanvas', snapshot)}`;
 }
 
+function parseScalarXmlValue(value: string) {
+  const trimmed = value.trim();
+  if (trimmed === '') return '';
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (trimmed === 'null') return null;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric) && String(numeric) === trimmed) return numeric;
+  return trimmed;
+}
+
+function xmlElementToValue(element: Element): unknown {
+  const children = Array.from(element.children);
+  if (children.length === 0) return parseScalarXmlValue(element.textContent ?? '');
+  if (children.every((child) => child.tagName === 'item')) {
+    return children.map((child) => xmlElementToValue(child));
+  }
+
+  return children.reduce<Record<string, unknown>>((acc, child) => {
+    const value = xmlElementToValue(child);
+    if (child.tagName in acc) {
+      acc[child.tagName] = Array.isArray(acc[child.tagName])
+        ? [...(acc[child.tagName] as unknown[]), value]
+        : [acc[child.tagName], value];
+    } else {
+      acc[child.tagName] = value;
+    }
+    return acc;
+  }, {});
+}
+
+function parseWorkflowSnapshotFile(text: string, filename: string) {
+  const trimmed = text.trim();
+  if (filename.toLowerCase().endsWith('.json') || trimmed.startsWith('{')) {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  }
+
+  const doc = new DOMParser().parseFromString(trimmed, 'application/xml');
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) throw new Error('The XML file could not be parsed.');
+  const root = doc.documentElement;
+  if (root.tagName !== 'videoforgeWorkflowCanvas') {
+    throw new Error('This XML is not a VideoForge workflow export.');
+  }
+  return xmlElementToValue(root) as Record<string, unknown>;
+}
+
+function isWorkflowSnapshot(value: unknown): value is Record<string, unknown> {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as { schema?: unknown }).schema === 'videoforge.workflow.canvas',
+  );
+}
+
+function normalizeWorkflowSnapshotForImport(snapshot: Record<string, unknown>) {
+  const layout = snapshot.layout && typeof snapshot.layout === 'object'
+    ? snapshot.layout as Record<string, unknown>
+    : {};
+  const positions = layout.positions && typeof layout.positions === 'object' && !Array.isArray(layout.positions)
+    ? layout.positions as Record<string, unknown>
+    : {};
+  const graph = snapshot.graph && typeof snapshot.graph === 'object'
+    ? snapshot.graph as { nodes?: unknown }
+    : {};
+  const graphPositions = Array.isArray(graph.nodes)
+    ? Object.fromEntries(
+      graph.nodes
+        .map((node) => {
+          if (!node || typeof node !== 'object') return null;
+          const item = node as { id?: unknown; position?: unknown };
+          if (typeof item.id !== 'string' || !item.position || typeof item.position !== 'object') return null;
+          return [item.id, item.position];
+        })
+        .filter(Boolean) as [string, unknown][],
+    )
+    : {};
+
+  return {
+    ...snapshot,
+    layout: {
+      ...layout,
+      positions: {
+        ...positions,
+        ...graphPositions,
+      },
+    },
+  };
+}
+
 export function WorkflowViewInner() {
   const sceneMap = useWorkflowStore((s) => s.sceneMap);
   const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
@@ -190,6 +282,7 @@ export function WorkflowViewInner() {
   const setNodePosition = useWorkflowStore((s) => s.setNodePosition);
   const addNodeAt = useWorkflowStore((s) => s.addNodeAt);
   const addWorkflowConnection = useWorkflowStore((s) => s.addWorkflowConnection);
+  const importWorkflowSnapshot = useWorkflowStore((s) => s.importWorkflowSnapshot);
   const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
   const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
   const edgeLabelPlacement = useSettingsStore((s) => s.settings.edgeLabelPlacement ?? 'in-node');
@@ -198,8 +291,11 @@ export function WorkflowViewInner() {
   const { currentProjectId, getCurrentProject } = useProjectStore();
   const currentProject = getCurrentProject();
   const [, setSelectedNode] = useState<string | null>(null);
+  const [isImportDragging, setIsImportDragging] = useState(false);
   const [outputViewSceneId, setOutputViewSceneId] = useState<string | null>(null);
   const rfRef = useRef<ReactFlowInstance | null>(null);
+  const dragDepthRef = useRef(0);
+  const { toast } = useToast();
   const { onNodeContextMenu, closeMenu: closeNodeMenu, menuUi, confirmUi, backdrop: nodeBackdrop } = useWorkflowNodeContextMenu();
   const { openMenu: openPaneMenu, closeMenu: closePaneMenu, menuUi: paneMenuUi, backdrop: paneBackdrop } = useWorkflowPaneMenu();
 
@@ -279,8 +375,8 @@ export function WorkflowViewInner() {
     [addWorkflowConnection],
   );
 
-  const isValidConnection = useCallback(
-    (connection: Connection) => handlesAreCompatible(connection.sourceHandle, connection.targetHandle),
+  const isValidConnection = useCallback<IsValidConnection>(
+    (connection) => handlesAreCompatible(connection.sourceHandle, connection.targetHandle),
     [],
   );
 
@@ -461,6 +557,77 @@ export function WorkflowViewInner() {
     downloadTextFile(`${baseName}.xml`, workflowSnapshotToXml(snapshot), 'application/xml;charset=utf-8');
   }, [buildExportSnapshot]);
 
+  const handleWorkflowDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setIsImportDragging(false);
+
+    const file = Array.from(event.dataTransfer.files).find((item) =>
+      item.name.toLowerCase().endsWith('.json') ||
+      item.name.toLowerCase().endsWith('.xml') ||
+      item.type === 'application/json' ||
+      item.type === 'application/xml' ||
+      item.type === 'text/xml',
+    );
+
+    if (!file) {
+      toast({
+        title: 'Unsupported file',
+        description: 'Drop a VideoForge workflow export as JSON or XML.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const snapshot = parseWorkflowSnapshotFile(await file.text(), file.name);
+      if (!isWorkflowSnapshot(snapshot)) {
+        throw new Error('This file is not a VideoForge workflow export.');
+      }
+      const normalizedSnapshot = normalizeWorkflowSnapshotForImport(snapshot);
+      importWorkflowSnapshot(normalizedSnapshot as Parameters<typeof importWorkflowSnapshot>[0]);
+
+      const viewport = (snapshot.layout as { viewport?: { x: number; y: number; zoom: number } } | undefined)?.viewport;
+      setTimeout(() => {
+        if (viewport) {
+          rfRef.current?.setViewport(viewport, { duration: 250 });
+        } else {
+          rfRef.current?.fitView({ padding: 0.3, duration: 250 });
+        }
+      }, 80);
+
+      toast({
+        title: 'Workflow loaded',
+        description: `${file.name} has been restored on this canvas.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Import failed',
+        description: error instanceof Error ? error.message : 'The workflow file could not be loaded.',
+        variant: 'destructive',
+      });
+    }
+  }, [importWorkflowSnapshot, toast]);
+
+  const handleWorkflowDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleWorkflowDragEnter = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsImportDragging(true);
+  }, []);
+
+  const handleWorkflowDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsImportDragging(false);
+  }, []);
+
   const viewScene = outputViewSceneId ? sceneMap[outputViewSceneId] : null;
   const viewUrl = viewScene?.generatedVideoUrl ?? viewScene?.generatedStartFrameUrl;
   const viewIsVideo = Boolean(viewScene?.generatedVideoUrl);
@@ -478,7 +645,18 @@ export function WorkflowViewInner() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="h-full w-full">
+      <div
+        className="relative h-full w-full"
+        onDrop={handleWorkflowDrop}
+        onDragOver={handleWorkflowDragOver}
+        onDragEnter={handleWorkflowDragEnter}
+        onDragLeave={handleWorkflowDragLeave}
+      >
+        {isImportDragging && (
+          <div className="pointer-events-none absolute inset-4 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-background/70 text-sm font-medium text-foreground shadow-2xl backdrop-blur-sm">
+            Drop workflow JSON or XML to load canvas
+          </div>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}

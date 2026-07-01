@@ -318,6 +318,19 @@ interface WorkflowState {
   getTotalDuration: () => number;
   buildFromStoryboard: (scenes: Scene[]) => void;
   hydrateFromProject: (projectId: string, scenes: Scene[]) => Promise<void>;
+  importWorkflowSnapshot: (snapshot: {
+    scenes?: Scene[];
+    notes?: WorkflowNote[];
+    motionControls?: WorkflowMotionControl[];
+    inputs?: WorkflowInput[];
+    connections?: WorkflowConnection[];
+    layout?: {
+      positions?: Record<string, { x: number; y: number }>;
+      hiddenNodes?: string[];
+      shownOutputs?: string[];
+      nodeColors?: NodeColorStyles;
+    };
+  }) => void;
 
   // Layout
   loadLayoutForProject: (projectId: string) => void;
@@ -1163,6 +1176,41 @@ export const useWorkflowStore = create<WorkflowState>()(
       persistLayout(get);
       await get().resumePendingGenerations();
       await get().resumePendingMotionControls();
+    },
+
+    importWorkflowSnapshot: (snapshot) => {
+      const importedScenes = Array.isArray(snapshot.scenes) ? snapshot.scenes : [];
+      const layout = snapshot.layout && typeof snapshot.layout === 'object' ? snapshot.layout : {};
+      const positions = layout.positions && typeof layout.positions === 'object' && !Array.isArray(layout.positions)
+        ? layout.positions
+        : {};
+      const nodeColors = layout.nodeColors && typeof layout.nodeColors === 'object' && !Array.isArray(layout.nodeColors)
+        ? layout.nodeColors
+        : {};
+      const hiddenNodes = Array.isArray(layout.hiddenNodes) ? layout.hiddenNodes : [];
+      const shownOutputs = Array.isArray(layout.shownOutputs) ? layout.shownOutputs : [];
+      set((s) => {
+        s.sceneMap = {};
+        s.sceneOrder = importedScenes.map((scene) => {
+          s.sceneMap[scene.id] = scene;
+          return scene.id;
+        });
+        s.nodePositions = positions;
+        s.nodeColorStyles = nodeColors;
+        s.noteNodes = Array.isArray(snapshot.notes) ? snapshot.notes : [];
+        s.motionControls = Array.isArray(snapshot.motionControls) ? snapshot.motionControls : [];
+        s.inputNodes = Array.isArray(snapshot.inputs) ? snapshot.inputs : [];
+        s.workflowConnections = Array.isArray(snapshot.connections) ? snapshot.connections : [];
+        s.hiddenNodeIds = Object.fromEntries(
+          hiddenNodes.map((id) => [id, true as const]),
+        );
+        s.shownOutputSceneIds = Object.fromEntries(
+          shownOutputs.map((id) => [id, true as const]),
+        );
+        syncOutputNodeVisibility(s);
+      });
+      persistLayout(get);
+      void persistStoryboard(get);
     },
 
     loadLayoutForProject: (projectId) => {
