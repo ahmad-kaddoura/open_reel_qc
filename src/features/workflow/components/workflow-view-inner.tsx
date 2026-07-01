@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { OutputPreviewDialog } from './output-preview-dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Play, Loader2, AlignHorizontalSpaceAround, ChevronDown, Download, FileCode2, FileJson } from 'lucide-react';
+import { Play, Loader2, AlignHorizontalSpaceAround, ChevronDown, Download, FileCode2, FileJson, Plus } from 'lucide-react';
 import { SceneNode } from './nodes/scene-node';
 import { OutputNode } from './nodes/output-node';
 import { ParametersNode } from './nodes/params-node';
@@ -43,6 +43,7 @@ import { PromptInputNode } from './nodes/prompt-input-node';
 import { MotionControlNode } from './nodes/motion-control-node';
 import { MotionOutputNode } from './nodes/motion-output-node';
 import { buildWorkflowGraph } from '../graph/workflow-graph';
+import { ADD_NODE_OPTIONS } from '../graph/workflow-node-catalog';
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
 import { useSettingsStore } from '@/features/settings/store';
@@ -141,6 +142,7 @@ export function WorkflowViewInner() {
   const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
   const getTotalDuration = useWorkflowStore((s) => s.getTotalDuration);
   const setNodePosition = useWorkflowStore((s) => s.setNodePosition);
+  const addNodeAt = useWorkflowStore((s) => s.addNodeAt);
   const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
   const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
   const edgeLabelPlacement = useSettingsStore((s) => s.settings.edgeLabelPlacement ?? 'in-node');
@@ -220,6 +222,31 @@ export function WorkflowViewInner() {
     [setEdges],
   );
 
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: any) => {
+      if (!connectionState.isValid) {
+        const { fromNode, fromHandle } = connectionState;
+        if (fromHandle?.id === 'motion-prompt-in' || fromHandle?.id === 'motion-prompt-out') {
+          const position = rfRef.current?.screenToFlowPosition({
+            x: 'clientX' in event ? event.clientX : event.touches[0].clientX,
+            y: 'clientY' in event ? event.clientY : event.touches[0].clientY,
+          }) ?? { x: 120, y: 120 };
+          const newId = addNodeAt('prompt-input', position);
+          
+          if (fromNode && newId) {
+            setEdges((eds) => addEdge({
+              source: fromHandle?.id === 'motion-prompt-out' ? fromNode.id : newId,
+              sourceHandle: 'motion-prompt-out',
+              target: fromHandle?.id === 'motion-prompt-out' ? newId : fromNode.id,
+              targetHandle: 'motion-prompt-in',
+            }, eds));
+          }
+        }
+      }
+    },
+    [addNodeAt, setEdges]
+  );
+
   const handleNodeDataChange = useCallback((nodeId: string, newData: Partial<import('@/core/types').Scene>) => {
     updateScene(nodeId, newData);
   }, [updateScene]);
@@ -237,6 +264,14 @@ export function WorkflowViewInner() {
     applyAutoLayout();
     setTimeout(() => rfRef.current?.fitView({ padding: 0.3, duration: 300 }), 80);
   }, [applyAutoLayout]);
+
+  const handleAddNode = useCallback((kind: (typeof ADD_NODE_OPTIONS)[number]['kind']) => {
+    const position = rfRef.current?.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    }) ?? { x: 120, y: 120 };
+    addNodeAt(kind, position);
+  }, [addNodeAt]);
 
   const buildExportSnapshot = useCallback(() => {
     const viewport = rfRef.current?.getViewport();
@@ -301,6 +336,7 @@ export function WorkflowViewInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
           onNodeDragStop={onNodeDragStop}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
@@ -345,6 +381,23 @@ export function WorkflowViewInner() {
           />
 
           <Panel position="top-left" className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 shadow-lg bg-card border-border">
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Node
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-56">
+                {ADD_NODE_OPTIONS.map((option) => (
+                  <DropdownMenuItem key={option.kind} onClick={() => handleAddNode(option.kind)} className="gap-2">
+                    <option.icon className={`w-3.5 h-3.5 ${option.color}`} />
+                    <span>{option.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm" onClick={handleAutoLayout} className="gap-1.5 shadow-lg bg-card border-border">
               <AlignHorizontalSpaceAround className="w-3.5 h-3.5" /> Auto Layout
             </Button>

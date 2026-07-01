@@ -11,7 +11,7 @@ interface VideoTypeCardProps {
 }
 
 export function VideoTypeCard({ icon, name, description, onClick }: VideoTypeCardProps) {
-  const IconComponent = (LucideIcons as Record<string, React.ComponentType<{ className?: string }>>)[icon] || LucideIcons.Film;
+  const IconComponent = (LucideIcons as any)[icon] || LucideIcons.Film;
 
   return (
     <Card

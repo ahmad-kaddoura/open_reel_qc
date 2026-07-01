@@ -169,7 +169,13 @@ export type WorkflowMotionControl = {
   imageUrl?: string;
   videoUrl?: string;
   prompt?: string;
+  negativePrompt?: string;
   outputUrl?: string;
+  duration?: number;
+  aspectRatio?: string;
+  cameraMovement?: string;
+  stylePreset?: string;
+  lighting?: string;
   status: MotionControlStatus;
   progress?: number;
   generationStartedAt?: string;
@@ -186,6 +192,7 @@ export type WorkflowInput = {
   imageUrl?: string;
   videoUrl?: string;
   prompt?: string;
+  negativePrompt?: string;
 };
 
 type LegacyWorkflowInput = Omit<WorkflowInput, 'kind'> & {

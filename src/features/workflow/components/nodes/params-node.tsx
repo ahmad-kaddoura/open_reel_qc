@@ -11,12 +11,15 @@ const ASPECT_RATIOS = ['9:16', '16:9', '1:1', '4:5', '21:9'];
 type WorkflowStyle = { border?: string; line?: string };
 
 function ParamsNodeComponent({ data }: NodeProps) {
-  const sceneId = (data as { sceneId: string }).sceneId;
+  const sceneId = (data as { sceneId?: string }).sceneId;
+  const motionId = (data as { motionId?: string }).motionId;
   const workflowStyle = (data as { workflowStyle?: WorkflowStyle }).workflowStyle;
-  const scene = useWorkflowStore((s) => s.sceneMap[sceneId]);
+  const scene = useWorkflowStore((s) => sceneId ? s.sceneMap[sceneId] : undefined);
+  const motion = useWorkflowStore((s) => motionId ? s.motionControls.find(m => m.id === motionId) : undefined);
   const updateScene = useWorkflowStore((s) => s.updateScene);
+  const updateMotionControl = useWorkflowStore((s) => s.updateMotionControl);
 
-  if (!scene) return null;
+  if (!scene && !motion) return null;
 
   return (
     <div className="relative">
@@ -44,13 +47,18 @@ function ParamsNodeComponent({ data }: NodeProps) {
                 type="number"
                 min={1}
                 max={60}
-                value={scene.duration}
+                value={scene?.duration ?? motion?.duration ?? 5}
                 onChange={(e) => {
                   const d = Number(e.target.value) || 1;
-                  updateScene(sceneId, {
-                    duration: d,
-                    endTime: scene.startTime + d,
-                  });
+                  if (sceneId && scene) {
+                    updateScene(sceneId, {
+                      duration: d,
+                      endTime: scene.startTime + d,
+                    });
+                  }
+                  if (motionId) {
+                    updateMotionControl(motionId, { duration: d });
+                  }
                 }}
                 className="h-7 text-xs px-1.5"
               />
@@ -60,8 +68,11 @@ function ParamsNodeComponent({ data }: NodeProps) {
 
           <Field label="Aspect Ratio">
             <Select
-              value={scene.aspectRatio ?? '9:16'}
-              onValueChange={(v) => updateScene(sceneId, { aspectRatio: v })}
+              value={scene?.aspectRatio ?? motion?.aspectRatio ?? '9:16'}
+              onValueChange={(v) => {
+                if (sceneId) updateScene(sceneId, { aspectRatio: v });
+                if (motionId) updateMotionControl(motionId, { aspectRatio: v });
+              }}
             >
               <SelectTrigger className="h-7 text-xs px-2">
                 <SelectValue />
@@ -76,8 +87,11 @@ function ParamsNodeComponent({ data }: NodeProps) {
 
           <Field label="Camera">
             <Select
-              value={scene.cameraMovement}
-              onValueChange={(v) => updateScene(sceneId, { cameraMovement: v as typeof scene.cameraMovement })}
+              value={scene?.cameraMovement ?? motion?.cameraMovement ?? ''}
+              onValueChange={(v) => {
+                if (sceneId && scene) updateScene(sceneId, { cameraMovement: v as typeof scene.cameraMovement });
+                if (motionId) updateMotionControl(motionId, { cameraMovement: v });
+              }}
             >
               <SelectTrigger className="h-7 text-xs px-2">
                 <SelectValue />
@@ -92,8 +106,11 @@ function ParamsNodeComponent({ data }: NodeProps) {
 
           <Field label="Visual Style">
             <Select
-              value={scene.stylePreset}
-              onValueChange={(v) => updateScene(sceneId, { stylePreset: v as typeof scene.stylePreset })}
+              value={scene?.stylePreset ?? motion?.stylePreset ?? ''}
+              onValueChange={(v) => {
+                if (sceneId && scene) updateScene(sceneId, { stylePreset: v as typeof scene.stylePreset });
+                if (motionId) updateMotionControl(motionId, { stylePreset: v });
+              }}
             >
               <SelectTrigger className="h-7 text-xs px-2">
                 <SelectValue />
@@ -109,9 +126,12 @@ function ParamsNodeComponent({ data }: NodeProps) {
           <Field label="Lighting">
             <Input
               type="text"
-              value={scene.lighting ?? ''}
+              value={scene?.lighting ?? motion?.lighting ?? ''}
               placeholder="golden hour…"
-              onChange={(e) => updateScene(sceneId, { lighting: e.target.value })}
+              onChange={(e) => {
+                if (sceneId) updateScene(sceneId, { lighting: e.target.value });
+                if (motionId) updateMotionControl(motionId, { lighting: e.target.value });
+              }}
               className="h-7 text-xs px-2"
             />
           </Field>

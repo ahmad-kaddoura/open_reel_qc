@@ -384,6 +384,7 @@ export interface GenerationModelRouting {
   imageModel: string;
   frameModel: string;
   videoModel: string;
+  motionControlModel: string;
   directorModel: string;
 }
 

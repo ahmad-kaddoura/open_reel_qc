@@ -28,7 +28,8 @@ function useMotion(id: string, data: NodeProps['data']) {
   const updateMotionControl = useWorkflowStore((s) => s.updateMotionControl);
   const updateInputNode = useWorkflowStore((s) => s.updateInputNode);
   const generateMotionControl = useWorkflowStore((s) => s.generateMotionControl);
-  return { id, motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode, generateMotionControl };
+  const cancelMotionControl = useWorkflowStore((s) => s.cancelMotionControl);
+  return { id, motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode, generateMotionControl, cancelMotionControl };
 }
 
 function ImageInputNodeComponent({ id, data }: NodeProps) {
@@ -117,15 +118,19 @@ function PromptInputNodeComponent({ id, data }: NodeProps) {
   const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode } = useMotion(id, data);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [draftNeg, setDraftNeg] = useState('');
   if (!motion && !input) return null;
   const prompt = motion?.prompt ?? input?.prompt ?? '';
-  const setPrompt = (value: string) => {
-    if (motionId) updateMotionControl(motionId, { prompt: value });
-    if (inputId) updateInputNode(inputId, { prompt: value });
+  const negativePrompt = motion?.negativePrompt ?? input?.negativePrompt ?? '';
+  
+  const setPrompts = (p: string, np: string) => {
+    if (motionId) updateMotionControl(motionId, { prompt: p, negativePrompt: np });
+    if (inputId) updateInputNode(inputId, { prompt: p, negativePrompt: np });
   };
 
   const openEdit = () => {
     setDraft(prompt);
+    setDraftNeg(negativePrompt);
     setOpen(true);
   };
 
@@ -143,18 +148,34 @@ function PromptInputNodeComponent({ id, data }: NodeProps) {
               <Pencil className="h-3 w-3 text-muted-foreground" />
             </button>
           </div>
-          <div className="p-2.5 text-[10px] leading-relaxed">
-            {prompt ? <p className="line-clamp-5">{prompt}</p> : <p className="text-muted-foreground/60">Optional prompt...</p>}
+          <div className="p-2.5 text-[10px] leading-relaxed flex flex-col gap-2">
+            <div>
+              <span className="font-semibold text-muted-foreground">Prompt:</span>
+              {prompt ? <p className="line-clamp-4 mt-0.5">{prompt}</p> : <p className="text-muted-foreground/60 mt-0.5">Optional prompt...</p>}
+            </div>
+            <div>
+              <span className="font-semibold text-muted-foreground">Negative Prompt:</span>
+              {negativePrompt ? <p className="line-clamp-3 mt-0.5">{negativePrompt}</p> : <p className="text-muted-foreground/60 mt-0.5">Optional negative prompt...</p>}
+            </div>
           </div>
         </div>
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle className="text-sm">Edit motion prompt</DialogTitle></DialogHeader>
-          <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-[180px]" placeholder="Describe what to preserve, stylize, or avoid..." />
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Prompt</label>
+              <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-[120px]" placeholder="Describe what to preserve, stylize, or avoid..." />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Negative Prompt</label>
+              <Textarea value={draftNeg} onChange={(e) => setDraftNeg(e.target.value)} className="min-h-[80px]" placeholder="Things to avoid..." />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => { setPrompt(draft); setOpen(false); }}>Save</Button>
+            <Button onClick={() => { setPrompts(draft, draftNeg); setOpen(false); }}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -163,18 +184,20 @@ function PromptInputNodeComponent({ id, data }: NodeProps) {
 }
 
 function MotionControlNodeComponent({ id, data }: NodeProps) {
-  const { motion, workflowStyle, generateMotionControl } = useMotion(id, data);
+  const { motion, workflowStyle, generateMotionControl, cancelMotionControl } = useMotion(id, data);
   if (!motion) return null;
   const busy = motion.status === 'queued' || motion.status === 'generating';
 
   return (
     <div className="relative">
-      <Handle type="target" position={Position.Left} id="motion-image-in" className="!h-3 !w-3 !border-2 !border-background !bg-sky-400" style={{ top: '28%' }} />
-      <Handle type="target" position={Position.Left} id="motion-video-in" className="!h-3 !w-3 !border-2 !border-background !bg-orange-500" style={{ top: '48%' }} />
-      <Handle type="target" position={Position.Left} id="motion-prompt-in" className="!h-3 !w-3 !border-2 !border-background !bg-purple-400" style={{ top: '68%' }} />
-      <PortLabel label="image" side="left" top="24%" color="#38bdf8" />
-      <PortLabel label="video" side="left" top="44%" color="#f97316" />
-      <PortLabel label="prompt" side="left" top="64%" color="#c084fc" />
+      <Handle type="target" position={Position.Left} id="motion-image-in" className="!h-3 !w-3 !border-2 !border-background !bg-sky-400" style={{ top: '24%' }} />
+      <Handle type="target" position={Position.Left} id="motion-video-in" className="!h-3 !w-3 !border-2 !border-background !bg-orange-500" style={{ top: '44%' }} />
+      <Handle type="target" position={Position.Left} id="motion-prompt-in" className="!h-3 !w-3 !border-2 !border-background !bg-purple-400" style={{ top: '64%' }} />
+      <Handle type="target" position={Position.Left} id="motion-parameters-in" className="!h-3 !w-3 !border-2 !border-background !bg-amber-500" style={{ top: '84%' }} />
+      <PortLabel label="image" side="left" top="20%" color="#38bdf8" />
+      <PortLabel label="video" side="left" top="40%" color="#f97316" />
+      <PortLabel label="prompt" side="left" top="60%" color="#c084fc" />
+      <PortLabel label="parameters" side="left" top="80%" color="#f59e0b" />
       <PortLabel label="video out" side="right" top="50%" color="#22c55e" />
       <div className="w-[260px] overflow-hidden rounded-xl border-2 border-sky-500/45 bg-card shadow-xl" style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}>
         <Header icon={<WandSparkles className="h-3 w-3" />} label={motion.title} color="text-sky-400" />
@@ -194,14 +217,17 @@ function MotionControlNodeComponent({ id, data }: NodeProps) {
           {motion.outputUrl && (
             <video src={motion.outputUrl} controls className="w-full rounded-md border border-border" poster={motion.imageUrl} />
           )}
-          <Button size="sm" className="h-8 w-full gap-1.5 text-xs" disabled={busy || !motion.imageUrl || !motion.videoUrl} onClick={() => generateMotionControl(motion.id)}>
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            {busy && motion.taskId && !motion.outputUrl
-              ? 'Resuming…'
-              : motion.outputUrl
-                ? 'Regenerate Motion Video'
-                : 'Generate Motion Video'}
-          </Button>
+          {busy ? (
+            <Button size="sm" variant="outline" className="h-8 w-full gap-1.5 border-red-500/40 text-red-500 hover:bg-red-500/10 hover:text-red-500" onClick={() => cancelMotionControl(motion.id)}>
+              <X className="h-3.5 w-3.5" />
+              Stop Motion Generation
+            </Button>
+          ) : (
+            <Button size="sm" className="h-8 w-full gap-1.5 text-xs" disabled={!motion.imageUrl || !motion.videoUrl} onClick={() => generateMotionControl(motion.id)}>
+              <Play className="h-3.5 w-3.5" />
+              {motion.outputUrl ? 'Regenerate Motion Video' : 'Generate Motion Video'}
+            </Button>
+          )}
           {motion.model && <p className="text-[9px] text-muted-foreground">Model: {motion.model}</p>}
         </div>
       </div>

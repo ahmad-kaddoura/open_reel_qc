@@ -16,6 +16,7 @@ function withGenerationModels(config: QwenConfig, generationModels?: Partial<Gen
     imageModel: generationModels.imageModel || config.imageModel,
     frameModel: generationModels.frameModel || config.frameModel,
     videoModel: generationModels.videoModel || config.videoModel,
+    motionControlModel: generationModels.motionControlModel || config.motionControlModel,
     directorModel: generationModels.directorModel || config.directorModel,
     effort: generationModels.effort || config.effort,
   };
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
       const { taskId, model } = await submitQwenMotionControlTask(config, {
         imageUrl: body.startFrameUrl,
         videoUrl: body.referenceVideoUrl,
+        prompt: body.prompt,
+        model: config.motionControlModel,
       });
 
       return NextResponse.json({ taskId, model });

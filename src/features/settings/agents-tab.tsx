@@ -67,11 +67,12 @@ export function AgentsTab() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
             <RouteModel label="Planning" value={generationModels.plannerModel} />
             <RouteModel label="Images" value={generationModels.imageModel} />
             <RouteModel label="Frames" value={generationModels.frameModel} />
             <RouteModel label="Video" value={generationModels.videoModel} />
+            <RouteModel label="Motion" value={generationModels.motionControlModel} />
             <RouteModel label="Review" value={generationModels.directorModel} />
           </div>
         </CardContent>

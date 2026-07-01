@@ -1,3 +1,6 @@
+export const MOTION_CONTROL_NEGATIVE_PROMPT =
+  'morphing, identity loss, change of face, change of clothes, change of style, distortion, deformation, flickering, artifacts';
+
 export const STYLE_PRESETS = [
   { id: 'cinematic', name: 'Cinematic', description: 'Film-quality, dramatic lighting, shallow depth of field', icon: 'Film' },
   { id: 'luxury_ad', name: 'Luxury Ad', description: 'High-end, elegant, premium feel with rich textures', icon: 'Diamond' },
@@ -107,6 +110,7 @@ export const QWEN_MODELS = [
   { id: 'qwen-image', name: 'Qwen Image', description: 'Balanced image generation', maxTokens: 0, task: 'image' },
   { id: 'wan2.1-i2v-plus', name: 'Wan 2.1 I2V Plus', description: 'Best image-to-video generation', maxTokens: 0, task: 'video' },
   { id: 'wan2.1-i2v-turbo', name: 'Wan 2.1 I2V Turbo', description: 'Faster image-to-video generation', maxTokens: 0, task: 'video' },
+  { id: 'wan2.2-animate-move', name: 'Wan 2.2 Animate Move', description: 'Best motion-transfer model for image + driving video', maxTokens: 0, task: 'video' },
 ] as const;
 
 export const GENERATION_MODEL_PRESETS = {
@@ -116,6 +120,7 @@ export const GENERATION_MODEL_PRESETS = {
     imageModel: 'qwen-image',
     frameModel: 'qwen-image',
     videoModel: 'wan2.1-i2v-turbo',
+    motionControlModel: 'wan2.2-animate-move',
     directorModel: 'qwen-vl-plus',
   },
   medium: {
@@ -124,6 +129,7 @@ export const GENERATION_MODEL_PRESETS = {
     imageModel: 'qwen-image',
     frameModel: 'qwen-image',
     videoModel: 'wan2.1-i2v-turbo',
+    motionControlModel: 'wan2.2-animate-move',
     directorModel: 'qwen-vl-max',
   },
   high: {
@@ -132,6 +138,7 @@ export const GENERATION_MODEL_PRESETS = {
     imageModel: 'qwen-image-plus',
     frameModel: 'qwen-image-plus',
     videoModel: 'wan2.1-i2v-plus',
+    motionControlModel: 'wan2.2-animate-move',
     directorModel: 'qwen-vl-max',
   },
 };

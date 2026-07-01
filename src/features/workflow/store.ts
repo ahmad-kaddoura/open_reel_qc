@@ -4,11 +4,13 @@ import { nanoid } from 'nanoid';
 import { applyNodeChanges, applyEdgeChanges, type OnNodesChange, type OnEdgesChange, type Connection, addEdge } from '@xyflow/react';
 import type { Scene, SceneStatus } from '@/core/types';
 import { useProjectStore } from '@/features/project/store';
+import { CAMERA_MOVEMENTS, STYLE_PRESETS } from '@/core/config';
 
 import { generateSceneAssets, SceneGenerationError } from './lib/generate-scene';
 import { buildScenePrompt } from './lib/prompt-template';
 import { useSettingsStore } from '@/features/settings/store';
 import { storage } from '@/services/storage/indexeddb';
+import { MOTION_CONTROL_NEGATIVE_PROMPT } from '@/core/config';
 import {
   computeAutoLayout,
   loadLayoutFromStorage,
@@ -26,14 +28,44 @@ import { nodeIdsForScene, sceneIdFromNodeId } from './graph/workflow-node-utils'
 import { nodeIdForKind, type WorkflowNodeKind } from './graph/workflow-node-catalog';
 
 const generationAbortControllers = new Map<string, AbortController>();
+const motionAbortControllers = new Map<string, AbortController>();
 const activeMotionPolls = new Set<string>();
 let batchGenerationCancelled = false;
+
+const DEFAULT_MOTION_CONTROL_PROMPT = [
+  'Animate the character from the reference image using the motion from the driving video.',
+  'Preserve the character\'s exact appearance, face, outfit, colors, proportions, and style.',
+  'Only transfer body pose, gesture, and timing from the video.',
+].join(' ');
+const MOTION_CONTROL_CANCELLED_MESSAGE = 'Motion control cancelled.';
+
+function isMotionControlCancellation(error: unknown) {
+  return (
+    (error instanceof Error && error.message === MOTION_CONTROL_CANCELLED_MESSAGE) ||
+    (error instanceof DOMException && error.name === 'AbortError')
+  );
+}
+
+function waitForMotionPollDelay(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error(MOTION_CONTROL_CANCELLED_MESSAGE));
+      return;
+    }
+    const timer = setTimeout(resolve, 2500);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new Error(MOTION_CONTROL_CANCELLED_MESSAGE));
+    }, { once: true });
+  });
+}
 
 async function pollMotionControlTask(
   id: string,
   taskId: string,
   model: string | undefined,
   updateMotionControl: (id: string, updates: Partial<Omit<WorkflowMotionControl, 'id'>>) => void,
+  signal: AbortSignal,
   generationStartedAt?: string,
 ): Promise<{ videoUrl: string; model?: string }> {
   const startedAt = generationStartedAt
@@ -42,12 +74,12 @@ async function pollMotionControlTask(
   const timeoutMs = 10 * 60 * 1000;
 
   while (Date.now() - startedAt < timeoutMs) {
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await waitForMotionPollDelay(signal);
     const elapsed = Date.now() - startedAt;
     updateMotionControl(id, { progress: Math.min(97, Math.round(12 + (elapsed / 180000) * 80)) });
 
     const params = new URLSearchParams({ taskId, ...(model ? { model } : {}) });
-    const pollResponse = await fetch(`/api/generate-scene?${params.toString()}`);
+    const pollResponse = await fetch(`/api/generate-scene?${params.toString()}`, { signal });
     if (!pollResponse.ok) {
       const data = await pollResponse.json().catch(() => ({}));
       throw new Error(data.error || `Motion control polling failed (${pollResponse.status})`);
@@ -83,6 +115,19 @@ function abortAllGenerationControllers() {
     controller.abort();
   }
   generationAbortControllers.clear();
+}
+
+function registerMotionAbortController(id: string): AbortController {
+  const existing = motionAbortControllers.get(id);
+  if (existing) existing.abort();
+  const controller = new AbortController();
+  motionAbortControllers.set(id, controller);
+  return controller;
+}
+
+function clearMotionAbortController(id: string, controller?: AbortController) {
+  if (controller && motionAbortControllers.get(id) !== controller) return;
+  motionAbortControllers.delete(id);
 }
 
 function persistLayout(get: () => WorkflowState) {
@@ -244,6 +289,7 @@ interface WorkflowState {
   updateMotionControl: (id: string, updates: Partial<Omit<WorkflowMotionControl, 'id'>>) => void;
   updateInputNode: (id: string, updates: Partial<Omit<WorkflowInput, 'id' | 'kind'>>) => void;
   generateMotionControl: (id: string, options?: { resume?: boolean }) => Promise<void>;
+  cancelMotionControl: (id: string) => void;
   updateScene: (id: string, updates: Partial<Scene>) => void;
   reorderScenes: (newOrder: string[]) => void;
   duplicateScene: (id: string) => void;
@@ -336,7 +382,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           s.motionControls.push({
             id,
             title: `Motion Control ${s.motionControls.length + 1}`,
-            prompt: '',
+            prompt: DEFAULT_MOTION_CONTROL_PROMPT,
             status: 'idle',
             progress: 0,
           });
@@ -356,7 +402,8 @@ export const useWorkflowStore = create<WorkflowState>()(
           s.inputNodes.push({
             id,
             kind,
-            prompt: kind === 'prompt-input' ? '' : undefined,
+            prompt: kind === 'prompt-input' ? DEFAULT_MOTION_CONTROL_PROMPT : undefined,
+            negativePrompt: kind === 'prompt-input' ? MOTION_CONTROL_NEGATIVE_PROMPT : undefined,
           });
           s.nodePositions[id] = position;
         });
@@ -533,18 +580,32 @@ export const useWorkflowStore = create<WorkflowState>()(
       }
 
       activeMotionPolls.add(id);
+      const controller = registerMotionAbortController(id);
 
       try {
         let taskId = motion.taskId;
         let model = motion.model;
 
         if (!isResume) {
+          const styleStr = motion.stylePreset ? ` Visual style: ${STYLE_PRESETS.find((s) => s.id === motion.stylePreset)?.name ?? motion.stylePreset}.` : '';
+          const lightingStr = motion.lighting ? ` Lighting: ${motion.lighting}.` : '';
+          const cameraStr = motion.cameraMovement ? ` Camera movement: ${CAMERA_MOVEMENTS.find((c) => c.id === motion.cameraMovement)?.name ?? motion.cameraMovement}.` : '';
+          
+          let builtPrompt = motion.prompt || DEFAULT_MOTION_CONTROL_PROMPT;
+          if (styleStr || lightingStr || cameraStr) {
+            builtPrompt += `\n${styleStr}${lightingStr}${cameraStr}`;
+          }
+
           const submitResponse = await fetch('/api/generate-scene', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               startFrameUrl: motion.imageUrl,
               referenceVideoUrl: motion.videoUrl,
+              prompt: builtPrompt,
+              negative_prompt: motion.negativePrompt,
+              generationModels: useSettingsStore.getState().settings.generationModels,
               motionControl: true,
             }),
           });
@@ -569,6 +630,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           taskId!,
           model,
           get().updateMotionControl,
+          controller.signal,
           isResume ? motion.generationStartedAt : undefined,
         );
 
@@ -579,6 +641,9 @@ export const useWorkflowStore = create<WorkflowState>()(
           progress: 100,
         });
       } catch (error) {
+        if (isMotionControlCancellation(error)) {
+          return;
+        }
         get().updateMotionControl(id, {
           status: 'failed',
           error: error instanceof Error ? error.message : 'Motion control generation failed.',
@@ -586,7 +651,24 @@ export const useWorkflowStore = create<WorkflowState>()(
         });
       } finally {
         activeMotionPolls.delete(id);
+        clearMotionAbortController(id, controller);
       }
+    },
+
+    cancelMotionControl: (id) => {
+      motionAbortControllers.get(id)?.abort();
+      activeMotionPolls.delete(id);
+      set((s) => {
+        const motion = s.motionControls.find((item) => item.id === id);
+        if (!motion) return;
+        motion.status = 'idle';
+        motion.progress = 0;
+        motion.generationStartedAt = undefined;
+        motion.taskId = undefined;
+        motion.error = undefined;
+      });
+      clearMotionAbortController(id);
+      persistLayout(get);
     },
 
     updateScene: (id, updates) => {

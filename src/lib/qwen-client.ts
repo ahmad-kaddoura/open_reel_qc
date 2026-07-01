@@ -1,6 +1,7 @@
 import dns from 'dns';
 import { readEnvFile } from '@/lib/env-file';
 import { DEFAULT_QWEN_BASE_URL, isEnvValueConfigured } from '@/core/config/env-keys';
+import { MOTION_CONTROL_NEGATIVE_PROMPT } from '@/core/config';
 
 // Local routers often fail to resolve Alibaba Cloud hostnames.
 // Fall back to public DNS before any outbound Qwen call.
@@ -14,9 +15,12 @@ export interface QwenConfig {
   imageModel: string;
   frameModel: string;
   videoModel: string;
+  motionControlModel: string;
   directorModel: string;
   effort: 'low' | 'medium' | 'high';
 }
+
+export const MOTION_CONTROL_MODEL = 'wan2.2-animate-move';
 
 export async function getQwenConfig(): Promise<QwenConfig | null> {
   const fromFile = await readEnvFile();
@@ -30,6 +34,7 @@ export async function getQwenConfig(): Promise<QwenConfig | null> {
   const imageModel = process.env.QWEN_IMAGE_MODEL || (effort === 'low' ? 'qwen-image' : 'qwen-image-plus');
   const frameModel = process.env.QWEN_FRAME_MODEL || imageModel;
   const videoModel = process.env.QWEN_VIDEO_MODEL || (effort === 'low' ? 'wan2.1-i2v-turbo' : 'wan2.1-i2v-plus');
+  const motionControlModel = process.env.QWEN_MOTION_CONTROL_MODEL || MOTION_CONTROL_MODEL;
   const directorModel = process.env.QWEN_DIRECTOR_MODEL || (effort === 'low' ? 'qwen-vl-plus' : 'qwen-vl-max');
 
   if (!isEnvValueConfigured(apiKey)) return null;
@@ -41,6 +46,7 @@ export async function getQwenConfig(): Promise<QwenConfig | null> {
     imageModel,
     frameModel,
     videoModel,
+    motionControlModel,
     directorModel,
     effort,
   };
@@ -206,8 +212,6 @@ export async function callQwenImageGeneration(
 
   return { url: imageUrl, model };
 }
-
-export const MOTION_CONTROL_MODEL = 'wan2.2-animate-move';
 
 function dashScopeBaseUrl(baseUrl: string): string {
   return baseUrl
@@ -490,7 +494,9 @@ export async function submitQwenMotionControlTask(
   options: {
     imageUrl: string;
     videoUrl: string;
-    mode?: 'wan-std' | 'wan-pro';
+    prompt?: string;
+    negative_prompt?: string;
+    mode?: 'wan-pro' | 'wan-std';
     model?: string;
   },
 ): Promise<{ taskId: string; model: string }> {
@@ -510,11 +516,16 @@ export async function submitQwenMotionControlTask(
       input: {
         image_url: imageUrl,
         video_url: videoUrl,
+        ...(options.prompt?.trim() ? { prompt: options.prompt.trim() } : {}),
       },
       parameters: {
         // wan-pro is the higher-fidelity mode (closer to Kling-level motion
         // transfer quality); wan-std trades quality for speed/cost.
         mode: options.mode || 'wan-pro',
+        // Disable prompt rewriting so the model uses our prompt exactly as-is,
+        // preventing DashScope from injecting driving-video characteristics.
+        prompt_extend: false,
+        negative_prompt: options.negative_prompt?.trim() || MOTION_CONTROL_NEGATIVE_PROMPT,
       },
     }),
   });

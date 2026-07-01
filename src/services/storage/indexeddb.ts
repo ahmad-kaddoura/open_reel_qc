@@ -186,7 +186,7 @@ export const storage = {
     const db = await getDB();
     const p = project as Record<string, unknown>;
     await db.put('projects', {
-      ...p,
+      ...(p as any),
       updatedAt: new Date().toISOString(),
     });
   },
@@ -204,14 +204,14 @@ export const storage = {
     const assetIndex = tx.objectStore('assets').index('by-project');
     const jobIndex = tx.objectStore('generationJobs').index('by-project');
 
-    let cursor = await chatIndex.openCursor(id);
-    while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
-    cursor = await charIndex.openCursor(id);
-    while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
-    cursor = await assetIndex.openCursor(id);
-    while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
-    cursor = await jobIndex.openCursor(id);
-    while (cursor) { await cursor.delete(); cursor = await cursor.continue(); }
+    let chatCursor = await chatIndex.openCursor(id);
+    while (chatCursor) { await chatCursor.delete(); chatCursor = await chatCursor.continue(); }
+    let charCursor = await charIndex.openCursor(id);
+    while (charCursor) { await charCursor.delete(); charCursor = await charCursor.continue(); }
+    let assetCursor = await assetIndex.openCursor(id);
+    while (assetCursor) { await assetCursor.delete(); assetCursor = await assetCursor.continue(); }
+    let jobCursor = await jobIndex.openCursor(id);
+    while (jobCursor) { await jobCursor.delete(); jobCursor = await jobCursor.continue(); }
     await tx.done;
   },
 
@@ -223,7 +223,7 @@ export const storage = {
 
   async saveChatMessage(message: unknown) {
     const db = await getDB();
-    await db.put('chatMessages', message);
+    await db.put('chatMessages', message as any);
   },
 
   async deleteChatMessage(id: string) {
@@ -253,7 +253,7 @@ export const storage = {
 
   async saveBrandKit(kit: unknown) {
     const db = await getDB();
-    await db.put('brandKits', kit);
+    await db.put('brandKits', kit as any);
   },
 
   async deleteBrandKit(id: string) {
@@ -274,7 +274,7 @@ export const storage = {
 
   async saveCharacter(character: unknown) {
     const db = await getDB();
-    await db.put('characters', character);
+    await db.put('characters', character as any);
   },
 
   async deleteCharacter(id: string) {
@@ -295,7 +295,7 @@ export const storage = {
 
   async saveAsset(asset: unknown) {
     const db = await getDB();
-    await db.put('assets', asset);
+    await db.put('assets', asset as any);
   },
 
   async deleteAsset(id: string) {
@@ -327,7 +327,7 @@ export const storage = {
 
   async saveJob(job: unknown) {
     const db = await getDB();
-    await db.put('generationJobs', job);
+    await db.put('generationJobs', job as any);
   },
 
   async deleteJob(id: string) {
