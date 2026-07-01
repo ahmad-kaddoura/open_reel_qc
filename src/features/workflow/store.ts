@@ -20,7 +20,7 @@ import {
   type NodeColorStyles,
   type WorkflowNote,
   type WorkflowMotionControl,
-  type WorkflowMotionInput,
+  type WorkflowInput,
 } from './graph/workflow-layout';
 import { nodeIdsForScene, sceneIdFromNodeId } from './graph/workflow-node-utils';
 import { nodeIdForKind, type WorkflowNodeKind } from './graph/workflow-node-catalog';
@@ -57,7 +57,7 @@ function persistLayout(get: () => WorkflowState) {
     nodeColors: get().nodeColorStyles,
     notes: get().noteNodes,
     motionControls: get().motionControls,
-    motionInputs: get().motionInputNodes,
+    inputs: get().inputNodes,
   });
 }
 
@@ -193,7 +193,7 @@ interface WorkflowState {
   shownOutputSceneIds: Record<string, true>;
   noteNodes: WorkflowNote[];
   motionControls: WorkflowMotionControl[];
-  motionInputNodes: WorkflowMotionInput[];
+  inputNodes: WorkflowInput[];
   layoutProjectId: string | null;
 
   // Scene CRUD
@@ -203,7 +203,7 @@ interface WorkflowState {
   removeWorkflowNode: (nodeId: string) => void;
   updateNoteNode: (id: string, updates: Partial<Omit<WorkflowNote, 'id'>>) => void;
   updateMotionControl: (id: string, updates: Partial<Omit<WorkflowMotionControl, 'id'>>) => void;
-  updateMotionInput: (id: string, updates: Partial<Omit<WorkflowMotionInput, 'id' | 'kind'>>) => void;
+  updateInputNode: (id: string, updates: Partial<Omit<WorkflowInput, 'id' | 'kind'>>) => void;
   generateMotionControl: (id: string) => Promise<void>;
   updateScene: (id: string, updates: Partial<Scene>) => void;
   reorderScenes: (newOrder: string[]) => void;
@@ -248,7 +248,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     shownOutputSceneIds: {},
     noteNodes: [],
     motionControls: [],
-    motionInputNodes: [],
+    inputNodes: [],
     layoutProjectId: null,
     isGeneratingAll: false,
 
@@ -308,13 +308,13 @@ export const useWorkflowStore = create<WorkflowState>()(
         return nodes.control;
       }
 
-      if (kind === 'reference-image' || kind === 'reference-video' || kind === 'motion-prompt') {
+      if (kind === 'image-input' || kind === 'video-input' || kind === 'prompt-input') {
         const id = `${kind}-${nanoid()}`;
         set((s) => {
-          s.motionInputNodes.push({
+          s.inputNodes.push({
             id,
             kind,
-            prompt: kind === 'motion-prompt' ? '' : undefined,
+            prompt: kind === 'prompt-input' ? '' : undefined,
           });
           s.nodePositions[id] = position;
         });
@@ -369,17 +369,33 @@ export const useWorkflowStore = create<WorkflowState>()(
 
     removeWorkflowNode: (nodeId) => {
       const sceneId = sceneIdFromNodeId(nodeId, get().sceneOrder);
+      const standaloneInput = get().inputNodes.some((input) => input.id === nodeId);
 
       set((s) => {
         if (nodeId.startsWith('note-')) {
           s.noteNodes = s.noteNodes.filter((note) => note.id !== nodeId);
         } else if (
-          nodeId.startsWith('reference-image-') ||
-          nodeId.startsWith('reference-video-') ||
-          nodeId.startsWith('motion-prompt-')
+          nodeId.startsWith('image-input-') ||
+          nodeId.startsWith('video-input-') ||
+          standaloneInput
         ) {
-          s.motionInputNodes = s.motionInputNodes.filter((input) => input.id !== nodeId);
-        } else if (nodeId.startsWith('motion-')) {
+          s.inputNodes = s.inputNodes.filter((input) => input.id !== nodeId);
+        } else if (nodeId.startsWith('motion-image-')) {
+          const motionId = nodeId.slice('motion-image-'.length);
+          const motion = s.motionControls.find((item) => item.id === motionId);
+          if (motion) motion.imageUrl = undefined;
+          s.hiddenNodeIds[nodeId] = true;
+        } else if (nodeId.startsWith('motion-video-')) {
+          const motionId = nodeId.slice('motion-video-'.length);
+          const motion = s.motionControls.find((item) => item.id === motionId);
+          if (motion) motion.videoUrl = undefined;
+          s.hiddenNodeIds[nodeId] = true;
+        } else if (nodeId.startsWith('motion-prompt-')) {
+          const motionId = nodeId.slice('motion-prompt-'.length);
+          const motion = s.motionControls.find((item) => item.id === motionId);
+          if (motion) motion.prompt = '';
+          s.hiddenNodeIds[nodeId] = true;
+        } else if (nodeId.startsWith('motion-control-')) {
           const motionId = nodeId.replace(/^motion-(?:image|video|prompt|control)-/, '');
           s.motionControls = s.motionControls.filter((motion) => motion.id !== motionId);
           for (const id of [
@@ -422,9 +438,9 @@ export const useWorkflowStore = create<WorkflowState>()(
       persistLayout(get);
     },
 
-    updateMotionInput: (id, updates) => {
+    updateInputNode: (id, updates) => {
       set((s) => {
-        const input = s.motionInputNodes.find((item) => item.id === id);
+        const input = s.inputNodes.find((item) => item.id === id);
         if (input) Object.assign(input, updates);
       });
       persistLayout(get);
@@ -915,7 +931,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         s.sceneMap = {};
         s.noteNodes = [];
         s.motionControls = [];
-        s.motionInputNodes = [];
+        s.inputNodes = [];
         s.sceneOrder = scenes.map((sc) => {
           s.sceneMap[sc.id] = sc;
           return sc.id;
@@ -938,7 +954,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         s.nodeColorStyles = saved?.nodeColors ?? {};
         s.noteNodes = saved?.notes ?? [];
         s.motionControls = saved?.motionControls ?? [];
-        s.motionInputNodes = saved?.motionInputs ?? [];
+        s.inputNodes = saved?.inputs ?? [];
         s.hiddenNodeIds = Object.fromEntries(
           (saved?.hiddenNodes ?? []).map((id) => [id, true as const]),
         );
@@ -959,7 +975,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         s.nodeColorStyles = saved?.nodeColors ?? {};
         s.noteNodes = saved?.notes ?? [];
         s.motionControls = saved?.motionControls ?? [];
-        s.motionInputNodes = saved?.motionInputs ?? [];
+        s.inputNodes = saved?.inputs ?? [];
         s.hiddenNodeIds = Object.fromEntries(
           (saved?.hiddenNodes ?? []).map((id) => [id, true as const]),
         );
@@ -1009,7 +1025,7 @@ export const useWorkflowStore = create<WorkflowState>()(
               `motion-prompt-${motion.id}`,
               `motion-control-${motion.id}`,
             ]),
-            ...s.motionInputNodes.map((input) => input.id),
+            ...s.inputNodes.map((input) => input.id),
           ]
             .map((id) => [id, s.nodePositions[id]] as const)
             .filter(([, position]) => Boolean(position)),

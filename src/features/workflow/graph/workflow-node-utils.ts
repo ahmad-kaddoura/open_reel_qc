@@ -34,9 +34,9 @@ export function nodeLabel(nodeType: string | undefined): string {
     case 'scene': return 'Scene';
     case 'asset': return 'Asset';
     case 'note': return 'Text (Notes)';
-    case 'motionImage': return 'Reference Image';
-    case 'motionVideo': return 'Reference Video';
-    case 'motionPrompt': return 'Motion Prompt';
+    case 'imageInput': return 'Image Input';
+    case 'videoInput': return 'Video Input';
+    case 'promptInput': return 'Prompt Input';
     case 'motionControl': return 'Motion Control';
     default: return 'Node';
   }

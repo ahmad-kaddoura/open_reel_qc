@@ -17,7 +17,7 @@ import {
   type NodeColorStyles,
   type WorkflowNote,
   type WorkflowMotionControl,
-  type WorkflowMotionInput,
+  type WorkflowInput,
 } from './workflow-layout';
 
 export {
@@ -68,7 +68,7 @@ export function buildWorkflowGraph(
   nodeColorStyles: NodeColorStyles = {},
   notes: WorkflowNote[] = [],
   motionControls: WorkflowMotionControl[] = [],
-  motionInputs: WorkflowMotionInput[] = [],
+  inputs: WorkflowInput[] = [],
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -94,13 +94,13 @@ export function buildWorkflowGraph(
     });
   });
 
-  motionInputs.forEach((input, idx) => {
+  inputs.forEach((input, idx) => {
     if (!visible(input.id)) return;
-    const type = input.kind === 'reference-image'
-      ? 'motionImage'
-      : input.kind === 'reference-video'
-        ? 'motionVideo'
-        : 'motionPrompt';
+    const type = input.kind === 'image-input'
+      ? 'imageInput'
+      : input.kind === 'video-input'
+        ? 'videoInput'
+        : 'promptInput';
     nodes.push({
       id: input.id,
       type,
@@ -115,6 +115,7 @@ export function buildWorkflowGraph(
       video: `motion-video-${motion.id}`,
       prompt: `motion-prompt-${motion.id}`,
       control: `motion-control-${motion.id}`,
+      output: `motion-output-${motion.id}`,
     };
     const base = savedPositions?.[ids.control] ?? { x: 80 + idx * 720, y: 340 };
     const fallback = {
@@ -122,13 +123,15 @@ export function buildWorkflowGraph(
       [ids.video]: { x: base.x - 280, y: base.y + 10 },
       [ids.prompt]: { x: base.x - 280, y: base.y + 190 },
       [ids.control]: base,
+      [ids.output]: { x: base.x + 340, y: base.y },
     };
 
     ([
-      [ids.image, 'motionImage'],
-      [ids.video, 'motionVideo'],
-      [ids.prompt, 'motionPrompt'],
+      [ids.image, 'imageInput'],
+      [ids.video, 'videoInput'],
+      [ids.prompt, 'promptInput'],
       [ids.control, 'motionControl'],
+      [ids.output, 'motionOutput'],
     ] as const).forEach(([id, type]) => {
       if (!visible(id)) return;
       nodes.push({
@@ -158,6 +161,21 @@ export function buildWorkflowGraph(
         ...edgeLabels(label, color, onEdge),
       });
     });
+
+    if (link(ids.control, ids.output)) {
+      edges.push({
+        id: `e-${ids.control}-${ids.output}`,
+        source: ids.control,
+        sourceHandle: 'motion-output-out',
+        target: ids.output,
+        targetHandle: 'motion-output-in',
+        type: 'smoothstep',
+        animated: motion.status === 'generating' || motion.status === 'queued',
+        style: { stroke: edgeStyle(ids.control, ids.output, C_MOTION_OUTPUT), strokeWidth: 2, opacity: 0.9 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeStyle(ids.control, ids.output, C_MOTION_OUTPUT) },
+        ...edgeLabels('video out', C_MOTION_OUTPUT, onEdge),
+      });
+    }
   });
 
   reusableAssets.forEach((asset, idx) => {

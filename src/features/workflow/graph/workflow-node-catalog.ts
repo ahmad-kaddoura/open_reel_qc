@@ -7,9 +7,9 @@ export type WorkflowNodeKind =
   | 'frames'
   | 'note'
   | 'motion-control'
-  | 'reference-image'
-  | 'reference-video'
-  | 'motion-prompt';
+  | 'image-input'
+  | 'video-input'
+  | 'prompt-input';
 
 export type AddNodeOption = {
   kind: WorkflowNodeKind;
@@ -70,26 +70,26 @@ export const ADD_NODE_OPTIONS: AddNodeOption[] = [
     color: 'text-sky-400',
   },
   {
-    kind: 'reference-image',
-    label: 'Reference Image',
-    description: 'Reusable image input for motion, style, or character reference',
-    keywords: ['reference', 'image', 'input', 'photo', 'motion'],
+    kind: 'image-input',
+    label: 'Image Input',
+    description: 'Reusable image input for any node that needs an image',
+    keywords: ['image', 'input', 'reference', 'photo', 'media'],
     icon: ImageIcon,
     color: 'text-sky-400',
   },
   {
-    kind: 'reference-video',
-    label: 'Reference Video',
-    description: 'Reusable video input for motion or timing reference',
-    keywords: ['reference', 'video', 'input', 'motion', 'kling'],
+    kind: 'video-input',
+    label: 'Video Input',
+    description: 'Reusable video input for any node that needs a video',
+    keywords: ['video', 'input', 'reference', 'media', 'motion'],
     icon: Video,
     color: 'text-orange-400',
   },
   {
-    kind: 'motion-prompt',
-    label: 'Motion Prompt',
-    description: 'Reusable optional prompt input for motion control',
-    keywords: ['motion', 'prompt', 'text', 'input', 'instruction'],
+    kind: 'prompt-input',
+    label: 'Prompt Input',
+    description: 'Reusable prompt input for any node that needs text instructions',
+    keywords: ['prompt', 'text', 'input', 'instruction'],
     icon: Pencil,
     color: 'text-purple-400',
   },
@@ -109,12 +109,12 @@ export function nodeIdForKind(kind: WorkflowNodeKind, sceneId: string): string {
       return `note-${sceneId}`;
     case 'motion-control':
       return `motion-control-${sceneId}`;
-    case 'reference-image':
-      return `reference-image-${sceneId}`;
-    case 'reference-video':
-      return `reference-video-${sceneId}`;
-    case 'motion-prompt':
-      return `motion-prompt-${sceneId}`;
+    case 'image-input':
+      return `image-input-${sceneId}`;
+    case 'video-input':
+      return `video-input-${sceneId}`;
+    case 'prompt-input':
+      return `prompt-input-${sceneId}`;
   }
 }
 

@@ -37,7 +37,10 @@ import { ScriptNode } from './nodes/script-node';
 import { FramesNode } from './nodes/frames-node';
 import { AssetNode } from './nodes/asset-node';
 import { NoteNode } from './nodes/note-node';
-import { MotionControlNode, MotionImageNode, MotionPromptNode, MotionVideoNode } from './nodes/motion-control-nodes';
+import { ImageInputNode } from './nodes/image-input-node';
+import { VideoInputNode } from './nodes/video-input-node';
+import { PromptInputNode } from './nodes/prompt-input-node';
+import { MotionControlNode } from './nodes/motion-control-node';
 import { buildWorkflowGraph } from '../graph/workflow-graph';
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
@@ -51,9 +54,9 @@ const nodeTypes: NodeTypes = {
   frames: FramesNode,
   asset: AssetNode,
   note: NoteNode,
-  motionImage: MotionImageNode,
-  motionVideo: MotionVideoNode,
-  motionPrompt: MotionPromptNode,
+  imageInput: ImageInputNode,
+  videoInput: VideoInputNode,
+  promptInput: PromptInputNode,
   motionControl: MotionControlNode,
 };
 
@@ -130,7 +133,7 @@ export function WorkflowViewInner() {
   const shownOutputSceneIds = useWorkflowStore((s) => s.shownOutputSceneIds);
   const noteNodes = useWorkflowStore((s) => s.noteNodes);
   const motionControls = useWorkflowStore((s) => s.motionControls);
-  const motionInputNodes = useWorkflowStore((s) => s.motionInputNodes);
+  const inputNodes = useWorkflowStore((s) => s.inputNodes);
   const updateScene = useWorkflowStore((s) => s.updateScene);
   const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
   const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
@@ -197,9 +200,9 @@ export function WorkflowViewInner() {
       nodeColorStyles,
       noteNodes,
       motionControls,
-      motionInputNodes,
+      inputNodes,
     ),
-    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles, noteNodes, motionControls, motionInputNodes],
+    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles, noteNodes, motionControls, inputNodes],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
@@ -246,7 +249,7 @@ export function WorkflowViewInner() {
       scenes,
       notes: noteNodes,
       motionControls,
-      motionInputs: motionInputNodes,
+      inputs: inputNodes,
       reusableAssets: currentProject?.creativePlan?.reusableAssets ?? [],
       layout: {
         positions: { ...nodePositions, ...canvasPositions },
@@ -260,7 +263,7 @@ export function WorkflowViewInner() {
         edges,
       },
     };
-  }, [currentProject, currentProjectId, edges, hiddenNodeIds, motionControls, motionInputNodes, nodeColorStyles, nodePositions, nodes, noteNodes, scenes, shownOutputSceneIds]);
+  }, [currentProject, currentProjectId, edges, hiddenNodeIds, motionControls, inputNodes, nodeColorStyles, nodePositions, nodes, noteNodes, scenes, shownOutputSceneIds]);
 
   const handleExportWorkflow = useCallback((format: 'json' | 'xml') => {
     const snapshot = buildExportSnapshot();
@@ -328,9 +331,9 @@ export function WorkflowViewInner() {
               if (node.type === 'frames') return 'hsl(173 58% 45%)';
               if (node.type === 'asset') return 'hsl(188 86% 53%)';
               if (node.type === 'note') return 'hsl(48 96% 53%)';
-              if (node.type === 'motionImage') return 'hsl(199 89% 48%)';
-              if (node.type === 'motionVideo') return 'hsl(24 95% 53%)';
-              if (node.type === 'motionPrompt') return 'hsl(271 91% 65%)';
+              if (node.type === 'imageInput') return 'hsl(199 89% 48%)';
+              if (node.type === 'videoInput') return 'hsl(24 95% 53%)';
+              if (node.type === 'promptInput') return 'hsl(271 91% 65%)';
               if (node.type === 'motionControl') return 'hsl(142 71% 45%)';
               return 'hsl(var(--primary))';
             }}

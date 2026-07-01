@@ -172,19 +172,24 @@ export type WorkflowMotionControl = {
   outputUrl?: string;
   status: MotionControlStatus;
   progress?: number;
+  generationStartedAt?: string;
   taskId?: string;
   model?: string;
   error?: string;
 };
 
-export type WorkflowMotionInputKind = 'reference-image' | 'reference-video' | 'motion-prompt';
+export type WorkflowInputKind = 'image-input' | 'video-input' | 'prompt-input';
 
-export type WorkflowMotionInput = {
+export type WorkflowInput = {
   id: string;
-  kind: WorkflowMotionInputKind;
+  kind: WorkflowInputKind;
   imageUrl?: string;
   videoUrl?: string;
   prompt?: string;
+};
+
+type LegacyWorkflowInput = Omit<WorkflowInput, 'kind'> & {
+  kind: WorkflowInputKind | 'reference-image' | 'reference-video' | 'motion-prompt';
 };
 
 export type WorkflowLayout = {
@@ -194,7 +199,8 @@ export type WorkflowLayout = {
   nodeColors?: NodeColorStyles;
   notes?: WorkflowNote[];
   motionControls?: WorkflowMotionControl[];
-  motionInputs?: WorkflowMotionInput[];
+  inputs?: WorkflowInput[];
+  motionInputs?: WorkflowInput[];
 };
 
 function isLegacyPositions(value: unknown): value is NodePositions {
@@ -215,7 +221,16 @@ function normalizeLayout(raw: unknown): WorkflowLayout | null {
       nodeColors: layout.nodeColors ?? {},
       notes: layout.notes ?? [],
       motionControls: layout.motionControls ?? [],
-      motionInputs: layout.motionInputs ?? [],
+      inputs: ((layout.inputs ?? layout.motionInputs ?? []) as LegacyWorkflowInput[]).map((input) => ({
+        ...input,
+        kind: input.kind === 'reference-image'
+          ? 'image-input'
+          : input.kind === 'reference-video'
+            ? 'video-input'
+            : input.kind === 'motion-prompt'
+              ? 'prompt-input'
+              : input.kind,
+      })) as WorkflowInput[],
     };
   }
   return null;

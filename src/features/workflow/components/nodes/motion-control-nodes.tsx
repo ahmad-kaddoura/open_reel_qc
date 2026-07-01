@@ -24,21 +24,21 @@ function useMotion(id: string, data: NodeProps['data']) {
   const inputId = (data as { inputId?: string }).inputId;
   const workflowStyle = (data as { workflowStyle?: WorkflowStyle }).workflowStyle;
   const motion = useWorkflowStore((s) => motionId ? s.motionControls.find((item) => item.id === motionId) : undefined);
-  const input = useWorkflowStore((s) => inputId ? s.motionInputNodes.find((item) => item.id === inputId) : undefined);
+  const input = useWorkflowStore((s) => inputId ? s.inputNodes.find((item) => item.id === inputId) : undefined);
   const updateMotionControl = useWorkflowStore((s) => s.updateMotionControl);
-  const updateMotionInput = useWorkflowStore((s) => s.updateMotionInput);
+  const updateInputNode = useWorkflowStore((s) => s.updateInputNode);
   const generateMotionControl = useWorkflowStore((s) => s.generateMotionControl);
-  return { id, motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateMotionInput, generateMotionControl };
+  return { id, motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode, generateMotionControl };
 }
 
-function MotionImageNodeComponent({ id, data }: NodeProps) {
-  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateMotionInput } = useMotion(id, data);
+function ImageInputNodeComponent({ id, data }: NodeProps) {
+  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode } = useMotion(id, data);
   const inputRef = useRef<HTMLInputElement>(null);
   if (!motion && !input) return null;
   const imageUrl = motion?.imageUrl ?? input?.imageUrl;
   const setImageUrl = (url?: string) => {
     if (motionId) updateMotionControl(motionId, { imageUrl: url });
-    if (inputId) updateMotionInput(inputId, { imageUrl: url });
+    if (inputId) updateInputNode(inputId, { imageUrl: url });
   };
 
   const pick = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,8 +51,9 @@ function MotionImageNodeComponent({ id, data }: NodeProps) {
   return (
     <div className="relative">
       <Handle type="source" position={Position.Right} id="motion-image-out" className="!h-3 !w-3 !border-2 !border-background !bg-sky-400" />
+      <PortLabel label="image out" side="right" top="50%" color="#38bdf8" />
       <div className="w-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-lg" style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}>
-        <Header icon={<ImageIcon className="h-3 w-3" />} label="Reference Image" color="text-sky-400" />
+        <Header icon={<ImageIcon className="h-3 w-3" />} label="Image Input" color="text-sky-400" />
         <div className="p-2.5">
           <div className="relative flex min-h-[140px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/20" onClick={() => !imageUrl && inputRef.current?.click()}>
             {imageUrl ? (
@@ -71,14 +72,14 @@ function MotionImageNodeComponent({ id, data }: NodeProps) {
   );
 }
 
-function MotionVideoNodeComponent({ id, data }: NodeProps) {
-  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateMotionInput } = useMotion(id, data);
+function VideoInputNodeComponent({ id, data }: NodeProps) {
+  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode } = useMotion(id, data);
   const inputRef = useRef<HTMLInputElement>(null);
   if (!motion && !input) return null;
   const videoUrl = motion?.videoUrl ?? input?.videoUrl;
   const setVideoUrl = (url?: string) => {
     if (motionId) updateMotionControl(motionId, { videoUrl: url });
-    if (inputId) updateMotionInput(inputId, { videoUrl: url });
+    if (inputId) updateInputNode(inputId, { videoUrl: url });
   };
 
   const pick = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,8 +92,9 @@ function MotionVideoNodeComponent({ id, data }: NodeProps) {
   return (
     <div className="relative">
       <Handle type="source" position={Position.Right} id="motion-video-out" className="!h-3 !w-3 !border-2 !border-background !bg-orange-500" />
+      <PortLabel label="video out" side="right" top="50%" color="#f97316" />
       <div className="w-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-lg" style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}>
-        <Header icon={<Video className="h-3 w-3" />} label="Reference Video" color="text-orange-400" />
+        <Header icon={<Video className="h-3 w-3" />} label="Video Input" color="text-orange-400" />
         <div className="p-2.5">
           <div className="relative flex min-h-[124px] cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/20" onClick={() => !videoUrl && inputRef.current?.click()}>
             {videoUrl ? (
@@ -111,15 +113,15 @@ function MotionVideoNodeComponent({ id, data }: NodeProps) {
   );
 }
 
-function MotionPromptNodeComponent({ id, data }: NodeProps) {
-  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateMotionInput } = useMotion(id, data);
+function PromptInputNodeComponent({ id, data }: NodeProps) {
+  const { motionId, inputId, motion, input, workflowStyle, updateMotionControl, updateInputNode } = useMotion(id, data);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   if (!motion && !input) return null;
   const prompt = motion?.prompt ?? input?.prompt ?? '';
   const setPrompt = (value: string) => {
     if (motionId) updateMotionControl(motionId, { prompt: value });
-    if (inputId) updateMotionInput(inputId, { prompt: value });
+    if (inputId) updateInputNode(inputId, { prompt: value });
   };
 
   const openEdit = () => {
@@ -131,10 +133,11 @@ function MotionPromptNodeComponent({ id, data }: NodeProps) {
     <>
       <div className="relative">
         <Handle type="source" position={Position.Right} id="motion-prompt-out" className="!h-3 !w-3 !border-2 !border-background !bg-purple-400" />
+        <PortLabel label="prompt out" side="right" top="50%" color="#c084fc" />
         <div className="w-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-lg" style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}>
           <div className="flex items-center justify-between border-b border-border bg-muted/30 px-2.5 py-1.5">
             <span className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-purple-400">
-              <Pencil className="h-3 w-3" /> Motion Prompt
+              <Pencil className="h-3 w-3" /> Prompt Input
             </span>
             <button type="button" className="rounded p-0.5 hover:bg-muted" onClick={openEdit}>
               <Pencil className="h-3 w-3 text-muted-foreground" />
@@ -169,6 +172,10 @@ function MotionControlNodeComponent({ id, data }: NodeProps) {
       <Handle type="target" position={Position.Left} id="motion-image-in" className="!h-3 !w-3 !border-2 !border-background !bg-sky-400" style={{ top: '28%' }} />
       <Handle type="target" position={Position.Left} id="motion-video-in" className="!h-3 !w-3 !border-2 !border-background !bg-orange-500" style={{ top: '48%' }} />
       <Handle type="target" position={Position.Left} id="motion-prompt-in" className="!h-3 !w-3 !border-2 !border-background !bg-purple-400" style={{ top: '68%' }} />
+      <PortLabel label="image" side="left" top="24%" color="#38bdf8" />
+      <PortLabel label="video" side="left" top="44%" color="#f97316" />
+      <PortLabel label="prompt" side="left" top="64%" color="#c084fc" />
+      <PortLabel label="video out" side="right" top="84%" color="#22c55e" />
       <div className="w-[260px] overflow-hidden rounded-xl border-2 border-sky-500/45 bg-card shadow-xl" style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}>
         <Header icon={<WandSparkles className="h-3 w-3" />} label={motion.title} color="text-sky-400" />
         <div className="space-y-2 p-3">
@@ -187,7 +194,21 @@ function MotionControlNodeComponent({ id, data }: NodeProps) {
           {motion.model && <p className="text-[9px] text-muted-foreground">Model: {motion.model}</p>}
         </div>
       </div>
+      <Handle type="source" position={Position.Right} id="motion-output-out" className="!h-3 !w-3 !border-2 !border-background !bg-emerald-500" style={{ top: '88%' }} />
     </div>
+  );
+}
+
+function PortLabel({ label, side, top, color }: { label: string; side: 'left' | 'right'; top: string; color: string }) {
+  return (
+    <span
+      className={`pointer-events-none absolute z-10 whitespace-nowrap text-[8px] font-medium ${
+        side === 'left' ? 'right-full mr-2' : 'left-full ml-2'
+      }`}
+      style={{ top, color }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -203,7 +224,7 @@ function ClearButton({ onClick }: { onClick: () => void }) {
   return <button type="button" onClick={(e) => { e.stopPropagation(); onClick(); }} className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white hover:bg-black/80"><X className="h-3 w-3" /></button>;
 }
 
-export const MotionImageNode = memo(MotionImageNodeComponent);
-export const MotionVideoNode = memo(MotionVideoNodeComponent);
-export const MotionPromptNode = memo(MotionPromptNodeComponent);
+export const ImageInputNode = memo(ImageInputNodeComponent);
+export const VideoInputNode = memo(VideoInputNodeComponent);
+export const PromptInputNode = memo(PromptInputNodeComponent);
 export const MotionControlNode = memo(MotionControlNodeComponent);
