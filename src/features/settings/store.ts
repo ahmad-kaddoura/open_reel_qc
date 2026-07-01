@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene } from '@/core/types';
 import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, DEFAULT_GENERATION_MODELS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE, GENERATION_MODEL_PRESETS } from '@/core/config';
+import { applyThemeClass } from '@/features/settings/theme-utils';
 
 interface SettingsState {
   settings: AppSettings;
@@ -98,17 +99,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       setTheme: (theme) => {
         set((s) => { s.settings.theme = theme; });
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else if (theme === 'light') {
-          document.documentElement.classList.remove('dark');
-        } else {
-          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        }
+        applyThemeClass(theme);
       },
 
       setDefaultAspectRatio: (ratio) => {
@@ -175,6 +166,11 @@ export const useSettingsStore = create<SettingsState>()(
             },
           },
         };
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state?.settings.theme) {
+          applyThemeClass(state.settings.theme);
+        }
       },
     }
   )

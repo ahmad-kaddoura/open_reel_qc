@@ -13,6 +13,7 @@ import {
 import { useWorkflowStore } from '@/features/workflow/store';
 import { useProjectStore } from '@/features/project/store';
 import { estimateSceneGenerationMs, formatGenerationDuration } from '@/features/workflow/lib/generate-scene';
+import { GenerationInfoPopover } from '@/features/workflow/components/generation-info-popover';
 
 function downloadAsset(url: string, filename: string) {
   const a = document.createElement('a');
@@ -204,8 +205,11 @@ function SceneOutputNode({
         className={`w-[220px] rounded-xl border-2 ${borderClass} bg-card shadow-xl overflow-hidden`}
         style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}
       >
-        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30">
+        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30 flex items-center justify-between gap-1">
           <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">Output</span>
+          {(isGenerating || isQueued) && (
+            <GenerationInfoPopover scene={scene} elapsedMs={elapsedMs} />
+          )}
         </div>
 
         <div className="bg-muted/30 relative">

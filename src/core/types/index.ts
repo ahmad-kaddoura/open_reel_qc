@@ -137,6 +137,7 @@ export interface Scene {
   generationStartedAt?: string;
   generationTaskId?: string;
   generationModel?: string;
+  generationModels?: GenerationModelRouting;
   generationError?: string;
   versions: SceneVersion[];
   costEstimate?: number;

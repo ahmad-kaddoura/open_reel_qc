@@ -402,6 +402,7 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       const template = useSettingsStore.getState().settings.scenePromptTemplate;
       const builtPrompt = buildScenePrompt(scene, template);
+      const generationModels = useSettingsStore.getState().settings.generationModels;
       const controller = registerGenerationAbortController(id);
 
       set((s) => {
@@ -412,6 +413,9 @@ export const useWorkflowStore = create<WorkflowState>()(
             ? s.sceneMap[id].generationStartedAt
             : new Date().toISOString();
           s.sceneMap[id].enhancedPrompt = builtPrompt;
+          if (!isResume || !s.sceneMap[id].generationModels) {
+            s.sceneMap[id].generationModels = generationModels;
+          }
           delete s.hiddenNodeIds[outputNodeId(id)];
           s.shownOutputSceneIds[id] = true;
           s.hiddenNodeIds[finalOutputNodeId] = true;
@@ -472,6 +476,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           sc.generationStartedAt = undefined;
           sc.generationTaskId = undefined;
           sc.generationModel = undefined;
+          sc.generationModels = undefined;
           sc.generationError = undefined;
           sc.generatedStartFrameUrl = result.startFrameUrl;
           sc.generatedEndFrameUrl = result.endFrameUrl;
@@ -545,6 +550,7 @@ export const useWorkflowStore = create<WorkflowState>()(
             s.sceneMap[id].generationStartedAt = undefined;
             s.sceneMap[id].generationTaskId = undefined;
             s.sceneMap[id].generationModel = undefined;
+            s.sceneMap[id].generationModels = undefined;
           }
           s.shownOutputSceneIds[id] = true;
         });
@@ -610,6 +616,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           sc.generationStartedAt = undefined;
           sc.generationTaskId = undefined;
           sc.generationModel = undefined;
+          sc.generationModels = undefined;
           sc.generationError = undefined;
         }
         s.hiddenNodeIds[finalOutputNodeId] = true;
@@ -645,6 +652,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         sc.generationStartedAt = undefined;
         sc.generationTaskId = undefined;
         sc.generationModel = undefined;
+        sc.generationModels = undefined;
         sc.generationError = undefined;
         sc.generatedStartFrameUrl = undefined;
         sc.generatedEndFrameUrl = undefined;

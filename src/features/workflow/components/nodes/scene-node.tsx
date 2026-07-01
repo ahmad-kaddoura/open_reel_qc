@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/shared/ui/status-badge';
@@ -11,6 +11,7 @@ import { MoreHorizontal, Play, RotateCcw, Trash2, Sparkles, ImageIcon, Loader2 }
 import { AI_ACTIONS } from '../../lib/ai-actions';
 import { useWorkflowStore } from '@/features/workflow/store';
 import { useSettingsStore } from '@/features/settings/store';
+import { GenerationInfoPopover } from '@/features/workflow/components/generation-info-popover';
 import type { Scene } from '@/core/types';
 type WorkflowStyle = { border?: string; line?: string };
 
@@ -34,8 +35,19 @@ function SceneNodeComponent({ data, id }: NodeProps) {
   const workflowStyle = (data as unknown as { workflowStyle?: WorkflowStyle }).workflowStyle;
   const generateScene = useWorkflowStore((s) => s.generateScene);
   const inNodeLabels = useSettingsStore((s) => (s.settings.edgeLabelPlacement ?? 'in-node') === 'in-node');
+  const [now, setNow] = useState(() => Date.now());
 
   const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
+  const isQueued = scene.status === 'queued';
+  const startedAt = scene.generationStartedAt ? new Date(scene.generationStartedAt).getTime() : null;
+  const elapsedMs = startedAt ? Math.max(0, now - startedAt) : undefined;
+
+  useEffect(() => {
+    if (!isGenerating && !isQueued) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating, isQueued]);
+
   const refPreview = scene.startFrameUrl ?? scene.generatedStartFrameUrl ?? scene.referenceImageUrls?.[0];
 
   const statusColors: Record<string, string> = {
@@ -78,9 +90,14 @@ function SceneNodeComponent({ data, id }: NodeProps) {
         className={`w-[240px] rounded-xl border-2 ${statusColors[scene.status] || 'border-border'} bg-card shadow-xl overflow-hidden`}
         style={workflowStyle?.border ? { borderColor: workflowStyle.border } : undefined}
       >
-        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30 flex items-center justify-between">
+        <div className="px-2.5 py-1.5 border-b border-border bg-muted/30 flex items-center justify-between gap-1">
           <span className="text-[9px] uppercase tracking-wider font-semibold text-foreground/80">Scene</span>
-          <StatusBadge status={scene.status} />
+          <div className="flex items-center gap-1">
+            {(isGenerating || isQueued) && (
+              <GenerationInfoPopover scene={scene} elapsedMs={elapsedMs} />
+            )}
+            <StatusBadge status={scene.status} />
+          </div>
         </div>
 
         <div className="bg-muted/30 relative">
@@ -136,7 +153,7 @@ function SceneNodeComponent({ data, id }: NodeProps) {
             <Button variant="outline" size="sm" className="w-full h-7 text-xs gap-1.5" onClick={() => generateScene(id)}>
               <RotateCcw className="w-3 h-3" /> Regenerate
             </Button>
-          ) : isGenerating || scene.status === 'queued' ? (
+          ) : isGenerating || isQueued ? (
             <Button variant="outline" size="sm" className="w-full h-7 text-xs" disabled>Generating…</Button>
           ) : null}
         </div>
