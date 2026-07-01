@@ -20,7 +20,7 @@ import type { AgentType } from '@/core/types';
 
 const AGENT_INFO: { type: AgentType; icon: string; category: string }[] = [
   { type: 'chat_planner', icon: '💬', category: 'Planning' },
-  { type: 'prompt_enhancer', icon: '✨', category: 'Planning' },
+  { type: 'prompt_enhancer', icon: '✨', category: 'Enhancement' },
   { type: 'storyboard_writer', icon: '🎬', category: 'Planning' },
   { type: 'hook_generator', icon: '🎣', category: 'Planning' },
   { type: 'image_generator', icon: '🖼️', category: 'Generation' },
@@ -199,8 +199,8 @@ export function SettingsView() {
                     <CardDescription className="text-xs">{config.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
+                    <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_0.8fr] gap-4">
+                      <div className="min-w-0">
                         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Model</Label>
                         <Select
                           value={config.modelId}
@@ -219,20 +219,22 @@ export function SettingsView() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                           Temperature: {config.temperature}
                         </Label>
-                        <Slider
-                          className="mt-3"
-                          value={[config.temperature]}
-                          onValueChange={([v]) => updateAgentConfig(type, { temperature: v })}
-                          min={0}
-                          max={2}
-                          step={0.1}
-                        />
+                        <div className="mt-3 h-8 flex items-center">
+                          <Slider
+                            className="w-full"
+                            value={[config.temperature]}
+                            onValueChange={([v]) => updateAgentConfig(type, { temperature: v })}
+                            min={0}
+                            max={2}
+                            step={0.1}
+                          />
+                        </div>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Max Tokens</Label>
                         <Input
                           type="number"
