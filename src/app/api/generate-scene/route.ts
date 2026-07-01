@@ -7,6 +7,7 @@ import {
   type QwenConfig,
 } from '@/lib/qwen-client';
 import type { GenerationModelRouting } from '@/core/types';
+import { getPrompt } from '@/core/prompts';
 
 function withGenerationModels(config: QwenConfig, generationModels?: Partial<GenerationModelRouting>): QwenConfig {
   if (!generationModels) return config;
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
         imageUrl: body.startFrameUrl,
         videoUrl: body.referenceVideoUrl,
         prompt: body.prompt,
+        negative_prompt: body.negative_prompt || getPrompt('negative.motion_control', body.promptOverrides),
         model: config.motionControlModel,
       });
 

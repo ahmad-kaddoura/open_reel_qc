@@ -10,7 +10,7 @@ import { generateSceneAssets, SceneGenerationError } from './lib/generate-scene'
 import { buildScenePrompt } from './lib/prompt-template';
 import { useSettingsStore } from '@/features/settings/store';
 import { storage } from '@/services/storage/indexeddb';
-import { MOTION_CONTROL_NEGATIVE_PROMPT } from '@/core/config';
+import { getPrompt } from '@/core/prompts';
 import {
   computeAutoLayout,
   loadLayoutFromStorage,
@@ -33,11 +33,6 @@ const motionAbortControllers = new Map<string, AbortController>();
 const activeMotionPolls = new Set<string>();
 let batchGenerationCancelled = false;
 
-const DEFAULT_MOTION_CONTROL_PROMPT = [
-  'Animate the character from the reference image using the motion from the driving video.',
-  'Preserve the character\'s exact appearance, face, outfit, colors, proportions, and style.',
-  'Only transfer body pose, gesture, and timing from the video.',
-].join(' ');
 const MOTION_CONTROL_CANCELLED_MESSAGE = 'Motion control cancelled.';
 
 function isMotionControlCancellation(error: unknown) {
@@ -389,6 +384,7 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       if (kind === 'motion-control') {
         const id = nanoid();
+        const promptOverrides = useSettingsStore.getState().settings.promptOverrides;
         const nodes = {
           image: `motion-image-${id}`,
           video: `motion-video-${id}`,
@@ -400,7 +396,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           s.motionControls.push({
             id,
             title: `Motion Control ${s.motionControls.length + 1}`,
-            prompt: DEFAULT_MOTION_CONTROL_PROMPT,
+            prompt: getPrompt('video.motion.default', promptOverrides),
             status: 'idle',
             progress: 0,
           });
@@ -416,12 +412,13 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       if (kind === 'image-input' || kind === 'video-input' || kind === 'prompt-input') {
         const id = `${kind}-${nanoid()}`;
+        const promptOverrides = useSettingsStore.getState().settings.promptOverrides;
         set((s) => {
           s.inputNodes.push({
             id,
             kind,
-            prompt: kind === 'prompt-input' ? DEFAULT_MOTION_CONTROL_PROMPT : undefined,
-            negativePrompt: kind === 'prompt-input' ? MOTION_CONTROL_NEGATIVE_PROMPT : undefined,
+            prompt: kind === 'prompt-input' ? getPrompt('video.motion.default', promptOverrides) : undefined,
+            negativePrompt: kind === 'prompt-input' ? getPrompt('negative.motion_control', promptOverrides) : undefined,
           });
           s.nodePositions[id] = position;
         });
@@ -635,7 +632,8 @@ export const useWorkflowStore = create<WorkflowState>()(
           const lightingStr = motion.lighting ? ` Lighting: ${motion.lighting}.` : '';
           const cameraStr = motion.cameraMovement ? ` Camera movement: ${CAMERA_MOVEMENTS.find((c) => c.id === motion.cameraMovement)?.name ?? motion.cameraMovement}.` : '';
           
-          let builtPrompt = motion.prompt || DEFAULT_MOTION_CONTROL_PROMPT;
+          const promptOverrides = useSettingsStore.getState().settings.promptOverrides;
+          let builtPrompt = motion.prompt || getPrompt('video.motion.default', promptOverrides);
           if (styleStr || lightingStr || cameraStr) {
             builtPrompt += `\n${styleStr}${lightingStr}${cameraStr}`;
           }
@@ -648,7 +646,7 @@ export const useWorkflowStore = create<WorkflowState>()(
               startFrameUrl: motion.imageUrl,
               referenceVideoUrl: motion.videoUrl,
               prompt: builtPrompt,
-              negative_prompt: motion.negativePrompt,
+              negative_prompt: motion.negativePrompt || getPrompt('negative.motion_control', promptOverrides),
               generationModels: useSettingsStore.getState().settings.generationModels,
               motionControl: true,
             }),
@@ -803,9 +801,10 @@ export const useWorkflowStore = create<WorkflowState>()(
         return;
       }
 
-      const template = useSettingsStore.getState().settings.scenePromptTemplate;
+      const settings = useSettingsStore.getState().settings;
+      const template = settings.promptOverrides?.['scenario.scene.base'] ?? settings.scenePromptTemplate;
       const builtPrompt = buildScenePrompt(scene, template);
-      const generationModels = useSettingsStore.getState().settings.generationModels;
+      const generationModels = settings.generationModels;
       const controller = registerGenerationAbortController(id);
 
       set((s) => {
@@ -841,6 +840,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           {
             prompt: builtPrompt,
             generationModels: useSettingsStore.getState().settings.generationModels,
+            promptOverrides: useSettingsStore.getState().settings.promptOverrides,
             existingTaskId: isResume ? scene.generationTaskId : undefined,
             existingModel: scene.generationModel,
             onTaskSubmitted: async (taskId, model) => {

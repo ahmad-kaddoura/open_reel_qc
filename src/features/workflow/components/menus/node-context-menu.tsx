@@ -12,6 +12,8 @@ import { AI_ACTIONS } from '../../lib/ai-actions';
 import { useProjectStore } from '@/features/project/store';
 import { storage } from '@/services/storage/indexeddb';
 import type { ReusableAssetPlan, Scene } from '@/core/types';
+import { useSettingsStore } from '@/features/settings/store';
+import { getPrompt } from '@/core/prompts';
 
 type ContextMenuState = {
   x: number;
@@ -45,6 +47,7 @@ function downloadAsset(url: string, filename: string) {
 export function useWorkflowNodeContextMenu() {
   const [menu, setMenu] = useState<ContextMenuState>(null);
   const [confirmDelete, setConfirmDelete] = useState<ContextMenuState>(null);
+  const promptOverrides = useSettingsStore((s) => s.settings.promptOverrides);
   const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
   const sceneMap = useWorkflowStore((s) => s.sceneMap);
   const removeWorkflowNode = useWorkflowStore((s) => s.removeWorkflowNode);
@@ -127,7 +130,13 @@ export function useWorkflowNodeContextMenu() {
   };
 
   const applyAIAction = (scene: Scene, actionPrompt: string) => {
-    const enhanced = `${scene.prompt}, ${actionPrompt === 'cinematic' ? 'dramatic cinematic lighting, shallow depth of field, film grain' : actionPrompt === 'realistic' ? 'photorealistic, natural lighting, 4K quality' : actionPrompt === 'viral' ? 'high energy, dynamic, attention-grabbing' : actionPrompt === 'camera' ? 'smooth professional camera work' : 'enhanced visual quality, more detailed'}`;
+    const suffix =
+      actionPrompt === 'cinematic' ? getPrompt('prompt.enhance.cinematic', promptOverrides) :
+      actionPrompt === 'realistic' ? getPrompt('prompt.enhance.realistic', promptOverrides) :
+      actionPrompt === 'viral' ? getPrompt('prompt.enhance.viral', promptOverrides) :
+      actionPrompt === 'camera' ? getPrompt('prompt.enhance.camera', promptOverrides) :
+      'enhanced visual quality, more detailed';
+    const enhanced = `${scene.prompt}, ${suffix}`;
     updateScene(scene.id, { prompt: enhanced });
   };
 

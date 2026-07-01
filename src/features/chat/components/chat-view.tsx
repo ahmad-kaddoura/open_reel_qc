@@ -23,7 +23,7 @@ const QUICK_ACTIONS = [
   { label: 'AI Review', icon: Eye, prompt: 'Please review my current video plan and give me your director\'s feedback.' },
 ];
 
-type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief' | 'assets_ready' | 'workflow';
+type ChatPhase = 'planning' | 'ready' | 'brainstorm' | 'brief' | 'plan_ready' | 'assets_ready' | 'workflow';
 
 function getAssistantPhase(msg: { metadata?: Record<string, unknown> } | undefined): ChatPhase | null {
   if (!msg?.metadata) return null;
@@ -64,6 +64,7 @@ export function ChatView() {
   const { messages, isStreaming, addMessage, setStreaming } = useChatStore();
   const { buildFromStoryboard } = useWorkflowStore();
   const generationModels = useSettingsStore((s) => s.settings.generationModels);
+  const promptOverrides = useSettingsStore((s) => s.settings.promptOverrides);
   const [input, setInput] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [configOpen, setConfigOpen] = useState(false);
@@ -77,6 +78,7 @@ export function ChatView() {
   const chatPhase = getAssistantPhase(lastAssistant);
   const stepMeta = getStepMeta(lastAssistant);
   const lastAssistantId = lastAssistant?.id;
+  const planReady = chatPhase === 'plan_ready';
   const assetsReady = chatPhase === 'assets_ready';
   const workflowReady = chatPhase === 'workflow';
 
@@ -125,6 +127,7 @@ export function ChatView() {
           referenceImageUrls: mergedRefs,
           projectId: currentProjectId,
           generationModels,
+          promptOverrides,
         }),
       });
 
@@ -198,6 +201,7 @@ export function ChatView() {
     currentProject,
     getCurrentProject,
     generationModels,
+    promptOverrides,
   ]);
 
   const handlePresetSelect = useCallback(
@@ -233,7 +237,9 @@ export function ChatView() {
     ? 'Refine the workflow — ask for scene, asset, prompt, or motion changes…'
     : assetsReady
       ? 'Adjust the assets, frames, story, or consistency before opening Workflow…'
-    : 'Describe the video idea, character, product, story, or goal…';
+      : chatPhase === 'plan_ready'
+        ? 'Ask for edits, or approve the plan to generate assets step by step…'
+        : 'Describe the video idea, character, product, story, or goal…';
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -316,28 +322,45 @@ export function ChatView() {
       </ScrollArea>
 
       {/* Next steps banner after a creative workflow is ready */}
-      {(assetsReady || workflowReady) && (
+      {(planReady || assetsReady || workflowReady) && (
         <div className="px-4 pb-2 shrink-0">
           <div className="max-w-3xl mx-auto rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">{assetsReady ? 'Assets and frames ready.' : 'Workflow ready.'}</span>{' '}
-              {assetsReady
-                ? 'Save reusable images or open Workflow when approved.'
-                : 'Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.'}
+              <span className="text-foreground font-medium">
+                {planReady ? 'Plan ready for approval.' : assetsReady ? 'Assets and frames ready.' : 'Workflow ready.'}
+              </span>{' '}
+              {planReady
+                ? 'Approve it to generate reusable source-of-truth assets before frames or videos.'
+                : assetsReady
+                  ? 'Confirm parameters, save reusable images, or open Workflow when approved.'
+                  : 'Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.'}
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1"
-                onClick={() => handleSend('Review the consistency references and improve the production plan before Workflow.')}
-                disabled={isStreaming}
-              >
-                <Boxes className="w-3 h-3" /> Review References
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setPhase('workflow')}>
-                Workflow <ArrowRight className="w-3 h-3" />
-              </Button>
+              {planReady ? (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => handleSend('I approve this plan. Generate the required source-of-truth assets step by step.')}
+                  disabled={isStreaming}
+                >
+                  <Boxes className="w-3 h-3" /> Approve Plan
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => handleSend('Review the consistency references and improve the production plan before Workflow.')}
+                    disabled={isStreaming}
+                  >
+                    <Boxes className="w-3 h-3" /> Review References
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setPhase('workflow')}>
+                    Workflow <ArrowRight className="w-3 h-3" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

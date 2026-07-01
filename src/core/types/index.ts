@@ -288,6 +288,10 @@ export interface CreativeWorkflowPlan {
   scenes: Scene[];
   consistencyRequirements: string[];
   renderSettingsDeferred: boolean;
+  suggestedAspectRatio?: AspectRatio;
+  suggestedDuration?: number;
+  outputFormat?: OutputFormat;
+  approvalStatus?: 'draft' | 'approved' | 'assets_generated' | 'workflow_ready';
 }
 
 // ============= Chat =============
@@ -388,6 +392,17 @@ export interface GenerationModelRouting {
   directorModel: string;
 }
 
+export interface PromptLibraryItem {
+  id: string;
+  group: string;
+  name: string;
+  description: string;
+  defaultValue: string;
+  variables?: readonly string[];
+}
+
+export type PromptOverrides = Record<string, string>;
+
 // ============= App Settings =============
 export interface AppSettings {
   agentConfigs: Record<AgentType, AgentConfig>;
@@ -398,6 +413,7 @@ export interface AppSettings {
   defaultPlatform: TargetPlatform;
   defaultFps: number;
   scenePromptTemplate: string;
+  promptOverrides: PromptOverrides;
   edgeLabelPlacement: EdgeLabelPlacement;
   canvasGrid: CanvasGridSettings;
   generationModels: GenerationModelRouting;

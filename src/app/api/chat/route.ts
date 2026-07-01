@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getQwenConfig, callQwenChat, callQwenImageGeneration, type QwenCallError, type QwenConfig } from '@/lib/qwen-client';
-import type { CreativeWorkflowPlan, GenerationModelRouting, GenerativeUIComponent, Scene, VideoBrief } from '@/core/types';
+import type { CreativeWorkflowPlan, GenerationModelRouting, GenerativeUIComponent, PromptOverrides, Scene, VideoBrief } from '@/core/types';
 import {
+  detectPlanApproval,
   detectChatIntent,
   extractConceptFromMessages,
   buildBriefFromProject,
   buildStoryboardScenes,
-  buildCreativeWorkflowPlan,
+  buildCreativeWorkflowPlanWithPrompts,
   BRAINSTORM_SYSTEM_PROMPT,
 } from '@/features/chat';
+import { resolvePrompt } from '@/core/prompts';
 
-function framePrompt(scene: Scene, kind: 'start' | 'end', plan: CreativeWorkflowPlan): string {
+function framePrompt(scene: Scene, kind: 'start' | 'end', plan: CreativeWorkflowPlan, promptOverrides?: PromptOverrides): string {
   const assetNotes = plan.reusableAssets
     .filter((asset) => scene.assetsUsed?.includes(asset.id))
     .map((asset) => `${asset.name}: ${asset.description}. ${asset.consistencyNotes}`)
@@ -20,16 +22,17 @@ function framePrompt(scene: Scene, kind: 'start' | 'end', plan: CreativeWorkflow
     .map((ref) => `${ref.name} (${ref.type}, ${ref.reusePolicy}): ${ref.consistencyNotes}`)
     .join('\n');
   const base = kind === 'start' ? scene.startFramePrompt : scene.endFramePrompt;
-  return `${base}
-
-Style: ${plan.toneAndStyle}.
-Video type: ${plan.videoMode}.
-Scene continuity: ${plan.consistencyRequirements.join(' ')}
-Reusable assets to preserve:
-${assetNotes || 'No reusable asset assigned.'}
-Consistency references:
-${referenceNotes || 'Use project visual direction and scene prompt only.'}
-Camera: ${scene.cameraMovement}. Lighting: ${scene.lighting}. Avoid: ${scene.negativePrompt || scene.avoid || ''}`;
+  return resolvePrompt(kind === 'start' ? 'frame.start.consistency' : 'frame.end.consistency', {
+    base,
+    style: plan.toneAndStyle,
+    mode: plan.videoMode,
+    continuity: plan.consistencyRequirements.join(' '),
+    assets: assetNotes || 'No reusable asset assigned.',
+    references: referenceNotes || 'Use project visual direction and scene prompt only.',
+    camera: scene.cameraMovement,
+    lighting: scene.lighting,
+    avoid: scene.negativePrompt || scene.avoid || '',
+  }, promptOverrides);
 }
 
 function withGenerationModels(config: QwenConfig, generationModels?: Partial<GenerationModelRouting>): QwenConfig {
@@ -40,6 +43,7 @@ function withGenerationModels(config: QwenConfig, generationModels?: Partial<Gen
     imageModel: generationModels.imageModel || config.imageModel,
     frameModel: generationModels.frameModel || config.frameModel,
     videoModel: generationModels.videoModel || config.videoModel,
+    motionControlModel: generationModels.motionControlModel || config.motionControlModel,
     directorModel: generationModels.directorModel || config.directorModel,
     effort: generationModels.effort || config.effort,
   };
@@ -71,8 +75,9 @@ async function generateImageWithRetry(
   throw lastError;
 }
 
-async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig): Promise<CreativeWorkflowPlan> {
+async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig, promptOverrides?: PromptOverrides): Promise<CreativeWorkflowPlan> {
   const next: CreativeWorkflowPlan = structuredClone(plan);
+  next.approvalStatus = 'approved';
 
   for (const asset of next.reusableAssets) {
     try {
@@ -94,11 +99,11 @@ async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig)
 
   for (const scene of next.scenes) {
     try {
-      const start = await generateImageWithRetry(config, framePrompt(scene, 'start', next), {
+      const start = await generateImageWithRetry(config, framePrompt(scene, 'start', next, promptOverrides), {
           model: config.frameModel,
           negativePrompt: scene.negativePrompt || scene.avoid,
       });
-      const end = await generateImageWithRetry(config, framePrompt(scene, 'end', next), {
+      const end = await generateImageWithRetry(config, framePrompt(scene, 'end', next, promptOverrides), {
           model: config.frameModel,
           negativePrompt: scene.negativePrompt || scene.avoid,
       });
@@ -117,6 +122,7 @@ async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig)
     }
   }
 
+  next.approvalStatus = 'assets_generated';
   next.consistencyReferences = next.consistencyReferences.map((ref) => {
     const asset = next.reusableAssets.find((item) => `ref-${item.id}` === ref.id || item.id === ref.id.replace(/^ref-/, ''));
     return asset
@@ -133,18 +139,13 @@ async function hydratePlanImages(plan: CreativeWorkflowPlan, config: QwenConfig)
   return next;
 }
 
-async function workflowPlanResponse(concept: string, refs: string[], metadata: Record<string, unknown> = {}, config?: QwenConfig | null) {
-  const basePlan = buildCreativeWorkflowPlan(concept, refs);
-  const plan = config ? await hydratePlanImages(basePlan, config) : basePlan;
-  const firstAsset = plan.reusableAssets[0]?.name ?? 'reusable visual asset';
-  const generatedAssets = plan.reusableAssets.filter((asset) => asset.generationStatus === 'generated').length;
-  const generatedFramePairs = plan.scenes.filter((scene) => scene.frameGenerationStatus === 'generated').length;
-  const imageNote = config
-    ? `Generated ${generatedAssets}/${plan.reusableAssets.length} reusable image asset${plan.reusableAssets.length === 1 ? '' : 's'} with **${config.imageModel}** and ${generatedFramePairs}/${plan.scenes.length} start/end frame pair${plan.scenes.length === 1 ? '' : 's'} with **${config.frameModel}**.`
-    : `Image generation is not configured, so I prepared the prompts and marked the assets/frames as pending instead of showing fake generated images.`;
+function planReviewResponse(plan: CreativeWorkflowPlan, metadata: Record<string, unknown> = {}, config?: QwenConfig | null, promptOverrides?: PromptOverrides) {
   return NextResponse.json({
-    content: `I created the **${firstAsset}** first so every shot can stay consistent. ${imageNote}\n\nReview or save the assets below, then open **Workflow**. The workflow will load with ${plan.reusableAssets.length} reusable asset node${plan.reusableAssets.length === 1 ? '' : 's'}, ${plan.scenes.length} scenes, and any generated start/end frames already attached so you can generate the scene videos and connect them into one consistent film.`,
-    phase: 'assets_ready',
+    content: resolvePrompt('scenario.plan.response', {
+      sceneCount: plan.scenes.length,
+      assetCount: plan.reusableAssets.length,
+    }, promptOverrides),
+    phase: 'plan_ready',
     generativeUI: [{ type: 'creative_workflow_plan', data: plan } satisfies GenerativeUIComponent],
     metadata: {
       model: config?.model || 'local',
@@ -152,7 +153,31 @@ async function workflowPlanResponse(concept: string, refs: string[], metadata: R
       frameModel: config?.frameModel,
       videoModel: config?.videoModel,
       directorModel: config?.directorModel,
-      intent: 'creative_workflow',
+      intent: 'creative_plan',
+      ...metadata,
+    },
+  });
+}
+
+async function approvedAssetsResponse(plan: CreativeWorkflowPlan, metadata: Record<string, unknown> = {}, config?: QwenConfig | null, promptOverrides?: PromptOverrides) {
+  const hydrated = config ? await hydratePlanImages(plan, config, promptOverrides) : { ...plan, approvalStatus: 'approved' as const };
+  const firstAsset = hydrated.reusableAssets[0]?.name ?? 'reusable visual asset';
+  const generatedAssets = hydrated.reusableAssets.filter((asset) => asset.generationStatus === 'generated').length;
+  const generatedFramePairs = hydrated.scenes.filter((scene) => scene.frameGenerationStatus === 'generated').length;
+  const imageNote = config
+    ? `Generated ${generatedAssets}/${hydrated.reusableAssets.length} reusable image asset${hydrated.reusableAssets.length === 1 ? '' : 's'} with **${config.imageModel}** and ${generatedFramePairs}/${hydrated.scenes.length} start/end frame pair${hydrated.scenes.length === 1 ? '' : 's'} with **${config.frameModel}**.`
+    : `Image generation is not configured, so I prepared the approved prompts and marked the assets/frames as pending instead of showing fake generated images.`;
+  return NextResponse.json({
+    content: `Plan approved. I prepared the **${firstAsset}** first so every shot can stay consistent. ${imageNote}\n\nConfirm the generated assets, number of scenes, length, aspect ratio, visual style, main subject, negative prompts, output format, and any manual preferences before generating videos in Workflow.`,
+    phase: 'assets_ready',
+    generativeUI: [{ type: 'creative_workflow_plan', data: hydrated } satisfies GenerativeUIComponent],
+    metadata: {
+      model: config?.model || 'local',
+      imageModel: config?.imageModel,
+      frameModel: config?.frameModel,
+      videoModel: config?.videoModel,
+      directorModel: config?.directorModel,
+      intent: 'approved_asset_generation',
       ...metadata,
     },
   });
@@ -160,7 +185,7 @@ async function workflowPlanResponse(concept: string, refs: string[], metadata: R
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, project, referenceImageUrls = [], generationModels } = await req.json();
+    const { messages, project, referenceImageUrls = [], generationModels, promptOverrides = {} } = await req.json();
 
     const convo = (messages || [])
       .filter((m: { role: string; content: string }) => m.role !== 'system' && m.content)
@@ -171,6 +196,7 @@ export async function POST(req: NextRequest) {
 
     const lastUser = convo.filter((m: { role: string }) => m.role === 'user').pop()?.content || '';
     const intent = detectChatIntent(lastUser);
+    const approved = detectPlanApproval(lastUser);
     const refs: string[] = referenceImageUrls || project?.referenceImageUrls || [];
     const concept = extractConceptFromMessages(convo);
 
@@ -198,46 +224,46 @@ export async function POST(req: NextRequest) {
 
     const rawConfig = await getQwenConfig();
     const config = rawConfig ? withGenerationModels(rawConfig, generationModels) : null;
+    const existingPlan = project?.creativePlan as CreativeWorkflowPlan | undefined;
+
+    if (approved && existingPlan) {
+      return approvedAssetsResponse(
+        { ...existingPlan, approvalStatus: 'approved' },
+        { model: config ? config.model : 'unconfigured', needsConfig: !config },
+        config,
+        promptOverrides,
+      );
+    }
 
     if (config) {
       const refNote = refs.length
-        ? `\n\nThe user attached ${refs.length} reference image(s). Describe how they could inspire the visual direction.`
+        ? `The user attached ${refs.length} reference image(s). Treat user-provided images as source-of-truth references where relevant.`
         : '';
       try {
         const result = await callQwenChat(
           config,
           [
-            { role: 'system', content: BRAINSTORM_SYSTEM_PROMPT + refNote },
+            { role: 'system', content: resolvePrompt('planning.chat.system', { referenceCount: refs.length, referenceNote: refNote }, promptOverrides) || BRAINSTORM_SYSTEM_PROMPT },
             ...convo,
           ],
           { jsonMode: false, maxTokens: 800 }
         );
-        const basePlan = buildCreativeWorkflowPlan(concept || lastUser, refs);
-        const plan = await hydratePlanImages(basePlan, config);
-        const generatedAssets = plan.reusableAssets.filter((asset) => asset.generationStatus === 'generated').length;
-        const generatedFramePairs = plan.scenes.filter((scene) => scene.frameGenerationStatus === 'generated').length;
-        return NextResponse.json({
-          content: `${result.content}\n\nI generated ${generatedAssets}/${plan.reusableAssets.length} reusable image assets with **${config.imageModel}** and ${generatedFramePairs}/${plan.scenes.length} start/end frame pairs with **${config.frameModel}**. Review or save them below, then open Workflow when you are ready to generate the scene videos.`,
-          phase: 'assets_ready',
-          generativeUI: [{ type: 'creative_workflow_plan', data: plan }],
-          metadata: {
+        const plan = buildCreativeWorkflowPlanWithPrompts(concept || lastUser, refs, promptOverrides);
+        return planReviewResponse(plan, {
             model: config.model,
-            imageModel: config.imageModel,
-            frameModel: config.frameModel,
-            videoModel: config.videoModel,
-            directorModel: config.directorModel,
-            phase: 'assets_ready',
-            intent: 'creative_workflow',
+            aiPlanningNotes: result.content,
+            intent: 'creative_plan',
             tokens: result.usage?.total_tokens,
-          },
-        });
+          }, config, promptOverrides);
       } catch (err) {
         const qErr = err as QwenCallError;
-        return workflowPlanResponse(concept || lastUser, refs, { model: 'fallback', error: qErr.kind, notice: qErr.message }, config);
+        const plan = buildCreativeWorkflowPlanWithPrompts(concept || lastUser, refs, promptOverrides);
+        return planReviewResponse(plan, { model: 'fallback', error: qErr.kind, notice: qErr.message }, config, promptOverrides);
       }
     }
 
-    return workflowPlanResponse(concept || lastUser, refs, { model: 'unconfigured', needsConfig: true }, null);
+    const plan = buildCreativeWorkflowPlanWithPrompts(concept || lastUser, refs, promptOverrides);
+    return planReviewResponse(plan, { model: 'unconfigured', needsConfig: true }, null, promptOverrides);
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });

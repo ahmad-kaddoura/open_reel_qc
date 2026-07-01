@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene } from '@/core/types';
+import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene, PromptOverrides } from '@/core/types';
 import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, DEFAULT_GENERATION_MODELS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE, GENERATION_MODEL_PRESETS } from '@/core/config';
+import { DEFAULT_PROMPT_LIBRARY, getDefaultPrompt } from '@/core/prompts';
 import { applyThemeClass } from '@/features/settings/theme-utils';
 
 interface SettingsState {
@@ -29,6 +30,10 @@ interface SettingsState {
   setDefaultPlatform: (platform: AppSettings['defaultPlatform']) => void;
   setScenePromptTemplate: (template: string) => void;
   resetScenePromptTemplate: () => void;
+  updatePromptOverride: (id: string, value: string) => void;
+  resetPromptOverride: (id: string) => void;
+  resetAllPromptOverrides: () => void;
+  getPromptValue: (id: string) => string;
   setEdgeLabelPlacement: (placement: AppSettings['edgeLabelPlacement']) => void;
   updateCanvasGrid: (updates: Partial<AppSettings['canvasGrid']>) => void;
   setGenerationEffort: (effort: GenerationEffort) => void;
@@ -43,6 +48,7 @@ const defaultSettings: AppSettings = {
   defaultPlatform: 'tiktok',
   defaultFps: 30,
   scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
+  promptOverrides: {},
   edgeLabelPlacement: 'in-node',
   canvasGrid: {
     enabled: false,
@@ -122,7 +128,49 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       resetScenePromptTemplate: () => {
-        set((s) => { s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE; });
+        set((s) => {
+          s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE;
+          delete s.settings.promptOverrides['scenario.scene.base'];
+        });
+      },
+
+      updatePromptOverride: (id, value) => {
+        set((s) => {
+          if (!s.settings.promptOverrides) s.settings.promptOverrides = {};
+          const defaultValue = getDefaultPrompt(id);
+          if (!value.trim() || value === defaultValue) {
+            delete s.settings.promptOverrides[id];
+          } else {
+            s.settings.promptOverrides[id] = value;
+          }
+          if (id === 'scenario.scene.base') {
+            s.settings.scenePromptTemplate = value;
+          }
+        });
+      },
+
+      resetPromptOverride: (id) => {
+        set((s) => {
+          delete s.settings.promptOverrides[id];
+          if (id === 'scenario.scene.base') {
+            s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE;
+          }
+        });
+      },
+
+      resetAllPromptOverrides: () => {
+        set((s) => {
+          s.settings.promptOverrides = {};
+          s.settings.scenePromptTemplate = DEFAULT_SCENE_PROMPT_TEMPLATE;
+        });
+      },
+
+      getPromptValue: (id) => {
+        const settings = get().settings;
+        if (id === 'scenario.scene.base') {
+          return settings.promptOverrides?.[id] ?? settings.scenePromptTemplate;
+        }
+        return settings.promptOverrides?.[id] ?? DEFAULT_PROMPT_LIBRARY.find((prompt) => prompt.id === id)?.defaultValue ?? '';
       },
 
       setEdgeLabelPlacement: (placement) => {
@@ -171,6 +219,18 @@ export const useSettingsStore = create<SettingsState>()(
               ...current.settings.generationModels,
               ...p?.settings?.generationModels,
             },
+            promptOverrides: {
+              ...current.settings.promptOverrides,
+              ...(p?.settings?.promptOverrides as PromptOverrides | undefined),
+              ...(p?.settings?.scenePromptTemplate &&
+              p.settings.scenePromptTemplate !== DEFAULT_SCENE_PROMPT_TEMPLATE
+                ? { 'scenario.scene.base': p.settings.scenePromptTemplate }
+                : {}),
+            },
+            scenePromptTemplate:
+              (p?.settings?.promptOverrides as PromptOverrides | undefined)?.['scenario.scene.base'] ??
+              p?.settings?.scenePromptTemplate ??
+              current.settings.scenePromptTemplate,
           },
         };
       },

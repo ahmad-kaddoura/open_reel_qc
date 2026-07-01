@@ -42,7 +42,7 @@ export function renderGenerativeUI(
 ): React.ReactNode {
   const opts = options;
   switch (gui.type) {
-    case 'creative_workflow_plan': return <CreativeWorkflowPlanCard key={key} plan={gui.data} />;
+    case 'creative_workflow_plan': return <CreativeWorkflowPlanCard key={key} plan={gui.data} onApprove={opts?.onPresetSelect} disabled={opts?.disabled} />;
     case 'style_selector': return <StyleSelector key={key} options={gui.data.options} />;
     case 'platform_selector': return <PlatformSelector key={key} options={gui.data.options} />;
     case 'aspect_ratio_selector': return <AspectRatioSelector key={key} options={gui.data.options} selected={gui.data.selected} {...opts} />;
@@ -57,7 +57,15 @@ export function renderGenerativeUI(
   }
 }
 
-function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
+function CreativeWorkflowPlanCard({
+  plan,
+  onApprove,
+  disabled,
+}: {
+  plan: CreativeWorkflowPlan;
+  onApprove?: (message: string) => void;
+  disabled?: boolean;
+}) {
   const { getCurrentProject, updateCurrentProject, setPhase } = useProjectStore();
   const { buildFromStoryboard } = useWorkflowStore();
   const videoMode = plan.videoMode ?? 'general';
@@ -93,6 +101,12 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
     setPhase('workflow');
   };
 
+  const approvePlan = () => {
+    onApprove?.('I approve this plan. Generate the required source-of-truth assets step by step.');
+  };
+
+  const hasGeneratedAssets = plan.approvalStatus === 'assets_generated' || plan.reusableAssets.some((asset) => asset.generatedImageUrl);
+
   return (
     <Card className="border-primary/20 bg-card/80">
       <CardHeader className="pb-3">
@@ -102,9 +116,15 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
             Creative Workflow Plan
             <Badge variant="secondary" className="h-5 text-[10px] capitalize">{videoMode.replace(/_/g, ' ')}</Badge>
           </span>
-          <Button size="sm" className="h-7 text-xs" onClick={openWorkflow}>
-            Use Generated Assets in Workflow →
-          </Button>
+          {hasGeneratedAssets ? (
+            <Button size="sm" className="h-7 text-xs" onClick={openWorkflow}>
+              Use Generated Assets in Workflow →
+            </Button>
+          ) : (
+            <Button size="sm" className="h-7 text-xs" onClick={approvePlan} disabled={disabled || !onApprove}>
+              Approve Plan & Generate Assets
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -137,7 +157,9 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
         )}
 
         <div className="space-y-2">
-          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Generated start/end frames</div>
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+            {hasGeneratedAssets ? 'Generated start/end frames' : 'Planned start/end frames'}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {plan.scenes.map((scene) => (
               <div key={scene.id} className="rounded-lg border border-border/50 bg-muted/20 p-3">
@@ -176,9 +198,9 @@ function CreativeWorkflowPlanCard({ plan }: { plan: CreativeWorkflowPlan }) {
         </div>
 
         <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Render settings</div>
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Parameter confirmation</div>
           <p className="text-[11px] text-muted-foreground">
-            Aspect ratio, duration, platform, model, quality, seed, motion strength, and final negative prompts stay in the output settings panel until this workflow is approved.
+            Suggested aspect ratio: {plan.suggestedAspectRatio ?? '9:16'}. Suggested duration: {plan.suggestedDuration ?? plan.scenes.reduce((sum, scene) => sum + scene.duration, 0)}s. Output format: {plan.outputFormat ?? 'mp4'}. Confirm these, the scene count, style, main subject, assets, negative prompts, and manual preferences before video generation.
           </p>
         </div>
       </CardContent>

@@ -1,5 +1,7 @@
-export const MOTION_CONTROL_NEGATIVE_PROMPT =
-  'morphing, identity loss, change of face, change of clothes, change of style, distortion, deformation, flickering, artifacts';
+import type { ExportPreset } from '../types';
+import { getDefaultPrompt, PROMPT_TEMPLATE_VARIABLES } from '@/core/prompts';
+
+export const MOTION_CONTROL_NEGATIVE_PROMPT = getDefaultPrompt('negative.motion_control');
 
 export const STYLE_PRESETS = [
   { id: 'cinematic', name: 'Cinematic', description: 'Film-quality, dramatic lighting, shallow depth of field', icon: 'Film' },
@@ -93,8 +95,6 @@ export const EXPORT_PRESETS: ExportPresetConfig[] = [
   { id: 'square', name: 'Square Post', platform: 'instagram_feed', aspectRatio: '1:1', resolution: '1080x1080', fps: 30, maxDuration: 60, format: 'mp4', quality: 'high' },
 ];
 
-import type { ExportPreset } from '../types';
-
 interface ExportPresetConfig extends ExportPreset {
   id: string;
   name: string;
@@ -153,7 +153,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.7,
     maxTokens: 4096,
-    systemPrompt: 'You are an expert video production planner. Help users develop their video ideas by asking insightful questions and suggesting creative directions. Focus on understanding the user\'s goals, target audience, and creative vision.',
+    systemPrompt: getDefaultPrompt('agent.chat_planner.system'),
     enabled: true,
   },
   prompt_enhancer: {
@@ -163,7 +163,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.6,
     maxTokens: 2048,
-    systemPrompt: 'You are a prompt engineering expert specializing in video generation. Enhance prompts to be more descriptive, cinematic, and effective for AI video generation.',
+    systemPrompt: getDefaultPrompt('agent.prompt_enhancer.system'),
     enabled: true,
   },
   storyboard_writer: {
@@ -173,7 +173,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.7,
     maxTokens: 8192,
-    systemPrompt: 'You are a professional storyboard artist and scriptwriter. Create detailed scene-by-scene video plans with visual direction, narration, camera movements, and timing.',
+    systemPrompt: getDefaultPrompt('agent.storyboard_writer.system'),
     enabled: true,
   },
   scene_generator: {
@@ -183,7 +183,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.8,
     maxTokens: 4096,
-    systemPrompt: 'You are a scene generation specialist. Create detailed scene descriptions optimized for AI video generation.',
+    systemPrompt: getDefaultPrompt('agent.scene_generator.system'),
     enabled: true,
   },
   image_generator: {
@@ -193,7 +193,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.7,
     maxTokens: 2048,
-    systemPrompt: 'You prepare image generation prompts for start/end frames and reference images.',
+    systemPrompt: getDefaultPrompt('agent.image_generator.system'),
     enabled: true,
   },
   frame_generator: {
@@ -203,7 +203,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.6,
     maxTokens: 2048,
-    systemPrompt: 'You generate detailed frame descriptions for video start and end points, ensuring visual continuity.',
+    systemPrompt: getDefaultPrompt('agent.frame_generator.system'),
     enabled: true,
   },
   video_generator: {
@@ -213,7 +213,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.5,
     maxTokens: 4096,
-    systemPrompt: 'You prepare video generation parameters and prompts for each scene.',
+    systemPrompt: getDefaultPrompt('agent.video_generator.system'),
     enabled: true,
   },
   voiceover_agent: {
@@ -223,7 +223,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.6,
     maxTokens: 4096,
-    systemPrompt: 'You write compelling voiceover and narration scripts for videos. Match tone to the video style and target audience.',
+    systemPrompt: getDefaultPrompt('agent.voiceover_agent.system'),
     enabled: true,
   },
   caption_agent: {
@@ -233,7 +233,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.5,
     maxTokens: 2048,
-    systemPrompt: 'You create engaging captions, subtitles, and text overlays for video content. Keep text concise and impactful.',
+    systemPrompt: getDefaultPrompt('agent.caption_agent.system'),
     enabled: true,
   },
   ai_director: {
@@ -243,7 +243,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.3,
     maxTokens: 4096,
-    systemPrompt: 'You are an experienced film director and video producer. Review storyboards, prompts, and generated content. Provide constructive feedback on pacing, visual consistency, storytelling, and overall quality.',
+    systemPrompt: getDefaultPrompt('agent.ai_director.system'),
     enabled: true,
   },
   video_assembler: {
@@ -253,7 +253,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.3,
     maxTokens: 4096,
-    systemPrompt: 'You manage the final video assembly process, ensuring smooth transitions, proper timing, and professional output.',
+    systemPrompt: getDefaultPrompt('agent.video_assembler.system'),
     enabled: true,
   },
   hook_generator: {
@@ -263,7 +263,7 @@ export const DEFAULT_AGENT_CONFIGS = {
     modelId: 'qwen-max',
     temperature: 0.9,
     maxTokens: 2048,
-    systemPrompt: 'You are a viral content strategist. Create powerful hooks and opening concepts that grab attention in the first 3 seconds. Focus on patterns that work for short-form video.',
+    systemPrompt: getDefaultPrompt('agent.hook_generator.system'),
     enabled: true,
   },
 };
@@ -277,37 +277,5 @@ export const DEFAULT_COST_CONTROLS = {
   maxVersions: 5,
 };
 
-export const DEFAULT_SCENE_PROMPT_TEMPLATE = `Create a {{duration}} video in {{aspectRatio}}.
-
-Scene:
-{{sceneDescription}}
-
-Action:
-{{actionDescription}}
-
-Camera:
-{{cameraMovement}}
-
-Visual style:
-{{visualStyle}}
-
-Lighting:
-{{lighting}}
-
-Details:
-{{details}}
-
-Avoid:
-{{avoid}}`;
-
-export const PROMPT_TEMPLATE_VARIABLES = [
-  { token: '{{duration}}', label: 'Duration (e.g. 7s)' },
-  { token: '{{aspectRatio}}', label: 'Aspect ratio (e.g. 9:16)' },
-  { token: '{{sceneDescription}}', label: 'Scene — subject, location, mood' },
-  { token: '{{actionDescription}}', label: 'Action — movement / change' },
-  { token: '{{cameraMovement}}', label: 'Camera movement' },
-  { token: '{{visualStyle}}', label: 'Visual style' },
-  { token: '{{lighting}}', label: 'Lighting' },
-  { token: '{{details}}', label: 'Details — textures, colors, atmosphere' },
-  { token: '{{avoid}}', label: 'Avoid — negative prompts' },
-] as const;
+export const DEFAULT_SCENE_PROMPT_TEMPLATE = getDefaultPrompt('scenario.scene.base');
+export { PROMPT_TEMPLATE_VARIABLES };

@@ -1,4 +1,4 @@
-import type { GenerationModelRouting, Scene } from '@/core/types';
+import type { GenerationModelRouting, PromptOverrides, Scene } from '@/core/types';
 
 export type GenerationProgressTiming = {
   elapsedMs: number;
@@ -79,6 +79,7 @@ export async function generateSceneAssets(
   options?: {
     prompt?: string;
     generationModels?: GenerationModelRouting;
+    promptOverrides?: PromptOverrides;
     existingTaskId?: string;
     existingModel?: string;
     onTaskSubmitted?: (taskId: string, model: string) => void | Promise<void>;
@@ -111,6 +112,7 @@ export async function generateSceneAssets(
         startFrameUrl,
         endFrameUrl,
         generationModels: options?.generationModels,
+        promptOverrides: options?.promptOverrides,
       }),
       signal: options?.signal,
     });

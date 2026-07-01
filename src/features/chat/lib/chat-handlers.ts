@@ -1,5 +1,6 @@
-import type { ConsistencyReference, CreativeWorkflowPlan, Project, ReusableAssetPlan, Scene, VideoBrief, VideoPlanningMode } from '@/core/types';
+import type { ConsistencyReference, CreativeWorkflowPlan, Project, PromptOverrides, ReusableAssetPlan, Scene, VideoBrief, VideoPlanningMode } from '@/core/types';
 import { buildVideoBriefPatch } from './video-output-utils';
+import { getDefaultPrompt, resolvePrompt } from '@/core/prompts';
 
 export type ChatIntent = 'planning' | 'brainstorm' | 'create_brief' | 'generate_storyboard' | 'hooks' | 'review';
 
@@ -14,6 +15,10 @@ export function detectChatIntent(message: string): ChatIntent | null {
   if (m.includes('hook')) return 'hooks';
   if (m.includes('review') || m.includes('director')) return 'review';
   return null;
+}
+
+export function detectPlanApproval(message: string): boolean {
+  return /approve|approved|looks good|generate assets|start assets|proceed|continue with this plan|use this plan/i.test(message);
 }
 
 export function extractConceptFromMessages(messages: { role: string; content: string }[]): string {
@@ -134,7 +139,7 @@ function inferVideoMode(concept: string, referenceImageUrls: string[] = []): Vid
   return explicitHuman ? 'influencer' : 'general';
 }
 
-function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImageUrls: string[]): ReusableAssetPlan[] {
+function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImageUrls: string[], promptOverrides?: PromptOverrides): ReusableAssetPlan[] {
   const lower = concept.toLowerCase();
   const assets: ReusableAssetPlan[] = [];
   const needsInfluencer = mode === 'influencer' || mode === 'hybrid';
@@ -150,8 +155,8 @@ function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImag
       consistencyNotes: 'Keep the same face, facial proportions, hairstyle, hair color, outfit, body style, skin tone, and overall identity across all related scenes.',
       styleNotes: 'Clean creator lighting, natural skin texture, stable wardrobe, premium social-video framing.',
       personality: 'Confident, warm, tutorial-friendly, credible, and consistent.',
-      referenceImagePrompt: `Photorealistic identity reference of the same influencer for ${concept}, clear face, hairstyle, outfit, body style, natural skin texture, clean creator environment, direct-to-camera look, high detail`,
-      negativePrompt: 'different face, different hair, outfit changes, body shape changes, distorted hands, extra fingers, heavy filters, plastic skin, unreadable text, random logos',
+      referenceImagePrompt: resolvePrompt('asset.influencer.reference', { concept }, promptOverrides),
+      negativePrompt: resolvePrompt('negative.influencer', {}, promptOverrides),
       usageNotes: 'Generate and lock this identity before frames. Reuse it in every start frame, end frame, and motion prompt involving the influencer.',
       saveTargets: ['brand_identity', 'project_assets'],
       criticality: 'critical',
@@ -168,10 +173,13 @@ function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImag
       generationStatus: 'pending',
       consistencyNotes: 'Keep product shape, dimensions, material, color, label placement, cap or closure details, and product scale consistent across every product scene.',
       styleNotes: 'Premium product photography with clean readable silhouette; avoid inventing real brand logos.',
-      referenceImagePrompt: referenceImageUrls.length
-        ? `Create a clean reusable product reference based on the user's attached product image(s) for ${concept}. Preserve product shape, color, label placement, material, scale, distinctive packaging, and brand style. Isolated premium product photography, high detail`
-        : `Premium product reference for ${concept}, elegant packaging or product form, clean label area, accurate scale, soft reflective surface, campaign lighting, high detail`,
-      negativePrompt: 'people, faces, hands unless explicitly requested, real trademarked logos, misspelled text, warped packaging, duplicated caps, messy background',
+      referenceImagePrompt: resolvePrompt('asset.product.reference', {
+        concept,
+        referencePolicy: referenceImageUrls.length
+          ? "Use the user's attached product image(s) as the source of truth."
+          : 'Create a clean reusable product source of truth.',
+      }, promptOverrides),
+      negativePrompt: resolvePrompt('negative.product', {}, promptOverrides),
       usageNotes: 'Use as the main visual reference for product, feature, environment, and CTA scenes.',
       saveTargets: ['project_assets', 'brand_identity'],
       criticality: 'critical',
@@ -188,7 +196,7 @@ function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImag
       generationStatus: 'pending',
       consistencyNotes: 'Keep surface material, prop family, lighting direction, color palette, background, and premium product scale consistent across related scenes.',
       styleNotes: 'Commercial product set design with controlled reflections, disciplined negative space, and brand-aligned props.',
-      referenceImagePrompt: `Photorealistic product set environment for ${concept}, no people, premium surface, brand-aligned props, controlled reflections, consistent lighting direction, editorial commercial composition, high detail`,
+      referenceImagePrompt: resolvePrompt('asset.environment.reference', { concept }, promptOverrides),
       negativePrompt: 'people, hands, faces, random logos, cluttered set, inconsistent lighting, distorted product scale',
       usageNotes: 'Reuse for product-only scenes unless the user asks for a new location.',
       saveTargets: ['brand_identity', 'project_assets'],
@@ -206,7 +214,7 @@ function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImag
       generationStatus: 'pending',
       consistencyNotes: 'Keep room geometry, vanity or set dressing, lighting direction, color palette, and camera height consistent when scenes are visually related.',
       styleNotes: 'Natural creator space with clean production polish and enough depth for scene variation.',
-      referenceImagePrompt: `Photorealistic influencer video background reference for ${concept}, clean creator environment, consistent vanity or studio lighting, cohesive props, no new character, high detail`,
+      referenceImagePrompt: resolvePrompt('asset.background.reference', { concept }, promptOverrides),
       negativePrompt: 'extra people, inconsistent room layout, random logos, messy clutter, unreadable text',
       usageNotes: 'Reuse for related scenes. Ask before switching to a new location.',
       saveTargets: ['brand_identity', 'project_assets'],
@@ -225,8 +233,11 @@ function inferAssetNeeds(concept: string, mode: VideoPlanningMode, referenceImag
       ? 'Protect product color, material, package proportions, brand palette, lighting direction, and composition grammar.'
       : 'Protect identity, outfit, background continuity, lighting direction, color grade, and camera language.',
     styleNotes: 'Compact production reference for consistency across images, frames, and video generation.',
-    referenceImagePrompt: `${mode === 'product' ? 'No people. Product-first' : 'Creator-led'} visual direction board for ${concept}, cohesive lighting, palette, lens choice, composition examples, premium AI video production style`,
-    negativePrompt: 'random logos, inconsistent style, chaotic collage, unreadable typography',
+    referenceImagePrompt: resolvePrompt('style.visual.direction', {
+      concept,
+      modeLead: mode === 'product' ? 'No people. Product-first' : 'Creator-led',
+    }, promptOverrides),
+    negativePrompt: resolvePrompt('negative.style', {}, promptOverrides),
     usageNotes: 'Attach as a consistency reference to every scene prompt and future regeneration.',
     saveTargets: ['brand_identity', 'project_assets'],
     criticality: 'critical',
@@ -247,15 +258,16 @@ function scene(
   action: string,
   assetsUsed: string[],
   mode: VideoPlanningMode,
+  promptOverrides?: PromptOverrides,
 ): Scene {
   const endTime = startTime + duration;
   const productOnly = mode === 'product';
   const startFramePrompt = productOnly
-    ? `${title} start frame for ${concept}: ${goal}. Product-first composition with no people, preserving exact product shape, packaging, color, brand style, props, lighting, surface, and environment.`
-    : `${title} start frame for ${concept}: ${goal}. Keep the same influencer face, hairstyle, outfit, body style, lighting, environment, and reusable assets.`;
+    ? resolvePrompt('scene.product.start', { title, concept, goal }, promptOverrides)
+    : resolvePrompt('scene.influencer.start', { title, concept, goal }, promptOverrides);
   const endFramePrompt = productOnly
-    ? `${title} end frame for ${concept}: show the completed product beat after the action, preserving the same product, props, surface, lighting, camera angle family, and brand style. No people unless explicitly requested.`
-    : `${title} end frame for ${concept}: show the completed beat after the action, preserving the same influencer identity, face, hairstyle, outfit, body style, lighting, environment, and related assets.`;
+    ? resolvePrompt('scene.product.end', { title, concept, goal }, promptOverrides)
+    : resolvePrompt('scene.influencer.end', { title, concept, goal }, promptOverrides);
 
   return {
     id: `scene-${index}`,
@@ -292,36 +304,36 @@ function scene(
     endFramePrompt,
     frameGenerationStatus: 'pending',
     motionPrompt: productOnly
-      ? `Animate ${action.toLowerCase()} with smooth product-focused camera movement, stable product geometry, consistent props, and no human elements unless explicitly requested.`
-      : `Animate ${action.toLowerCase()} with controlled creator-style movement, stable facial identity, same outfit and background, natural motion, and no sudden camera jumps.`,
+      ? resolvePrompt('video.product.motion', { action: action.toLowerCase() }, promptOverrides)
+      : resolvePrompt('video.influencer.motion', { action: action.toLowerCase() }, promptOverrides),
     negativePrompt: productOnly
-      ? 'people, faces, hands, model, human, distorted product, melted packaging, duplicated product, text artifacts, jump cuts'
-      : 'distorted hands, face changes, hairstyle changes, outfit changes, melted packaging, extra fingers, jump cuts, duplicated products, text artifacts',
+      ? resolvePrompt('negative.product.scene', {}, promptOverrides)
+      : resolvePrompt('negative.influencer.scene', {}, promptOverrides),
     narration: productOnly ? undefined : index === 1 ? 'Let me show you how this comes together.' : index === 4 ? 'Save this for later.' : undefined,
     assetsUsed,
   };
 }
 
-function buildProductScenes(concept: string, assetIds: string[], referenceImageUrls: string[]): Scene[] {
+function buildProductScenes(concept: string, assetIds: string[], referenceImageUrls: string[], promptOverrides?: PromptOverrides): Scene[] {
   const coreAssets = assetIds.filter((id) => !id.includes('influencer'));
   return [
-    scene(1, 'Product Hero Establish', 'Open with a precise hero shot that makes the product instantly recognizable.', concept, 4, 0, 'slow_push_in', 'Camera pushes toward the product on the brand-aligned surface with props framing it cleanly.', coreAssets, 'product'),
-    scene(2, 'Feature / Texture Detail', 'Show the product material, texture, applicator, or key feature without adding human subjects.', concept, 6, 4, 'close_up', 'Macro movement reveals the product detail, finish, packaging edge, or functional benefit.', coreAssets, 'product'),
-    scene(3, 'Environment / Use Case', 'Place the same product in a relevant environment while preserving product and brand continuity.', concept, 6, 10, 'orbit', 'Camera orbits gently around the product with related props and consistent lighting.', coreAssets, 'product'),
-    scene(4, 'Final Brand CTA', 'End with a clean product packshot and final branded composition.', concept, 4, 16, 'static', 'Product holds center frame with controlled negative space for a final CTA or tagline.', coreAssets, 'product'),
+    scene(1, 'Product Hero Establish', 'Open with a precise hero shot that makes the product instantly recognizable.', concept, 4, 0, 'slow_push_in', 'Camera pushes toward the product on the brand-aligned surface with props framing it cleanly.', coreAssets, 'product', promptOverrides),
+    scene(2, 'Feature / Texture Detail', 'Show the product material, texture, applicator, or key feature without adding human subjects.', concept, 6, 4, 'close_up', 'Macro movement reveals the product detail, finish, packaging edge, or functional benefit.', coreAssets, 'product', promptOverrides),
+    scene(3, 'Environment / Use Case', 'Place the same product in a relevant environment while preserving product and brand continuity.', concept, 6, 10, 'orbit', 'Camera orbits gently around the product with related props and consistent lighting.', coreAssets, 'product', promptOverrides),
+    scene(4, 'Final Brand CTA', 'End with a clean product packshot and final branded composition.', concept, 4, 16, 'static', 'Product holds center frame with controlled negative space for a final CTA or tagline.', coreAssets, 'product', promptOverrides),
   ].map((sc) => ({ ...sc, referenceImageUrls }));
 }
 
-function buildInfluencerScenes(concept: string, assetIds: string[], referenceImageUrls: string[], mode: VideoPlanningMode): Scene[] {
+function buildInfluencerScenes(concept: string, assetIds: string[], referenceImageUrls: string[], mode: VideoPlanningMode, promptOverrides?: PromptOverrides): Scene[] {
   const productIds = assetIds.filter((id) => id.includes('product'));
   const influencerIds = assetIds.filter((id) => id.includes('influencer') || id.includes('background') || id.includes('visual-style'));
   const allAssets = [...influencerIds, ...productIds];
 
   return [
-    scene(1, 'Hook / Identity Establish', 'Open by locking the influencer identity and the starting context.', concept, 4, 0, 'slow_push_in', 'The influencer looks into camera in the established environment and sets up the story.', influencerIds, mode),
-    scene(2, 'Action / Proof Beat', 'Show the key creator action while preserving face, hair, outfit, body style, and background continuity.', concept, 7, 4, 'close_up', 'The influencer performs the main action in a satisfying close-up with smooth movement.', allAssets, mode),
-    scene(3, 'Reveal / Payoff', 'Deliver the visual payoff with the same influencer identity and related scene continuity.', concept, 5, 11, 'dolly_in', 'The influencer turns toward the light or camera to reveal the completed moment.', influencerIds, mode),
-    scene(4, 'CTA / Final Moment', 'End with a clean creator or product-supported CTA that still preserves the locked identity.', concept, 4, 16, 'static', 'The influencer holds the final pose or product moment with stable composition.', allAssets, mode),
+    scene(1, 'Hook / Identity Establish', 'Open by locking the influencer identity and the starting context.', concept, 4, 0, 'slow_push_in', 'The influencer looks into camera in the established environment and sets up the story.', influencerIds, mode, promptOverrides),
+    scene(2, 'Action / Proof Beat', 'Show the key creator action while preserving face, hair, outfit, body style, and background continuity.', concept, 7, 4, 'close_up', 'The influencer performs the main action in a satisfying close-up with smooth movement.', allAssets, mode, promptOverrides),
+    scene(3, 'Reveal / Payoff', 'Deliver the visual payoff with the same influencer identity and related scene continuity.', concept, 5, 11, 'dolly_in', 'The influencer turns toward the light or camera to reveal the completed moment.', influencerIds, mode, promptOverrides),
+    scene(4, 'CTA / Final Moment', 'End with a clean creator or product-supported CTA that still preserves the locked identity.', concept, 4, 16, 'static', 'The influencer holds the final pose or product moment with stable composition.', allAssets, mode, promptOverrides),
   ].map((sc) => ({ ...sc, referenceImageUrls }));
 }
 
@@ -344,13 +356,21 @@ function buildConsistencyReferences(planId: string, mode: VideoPlanningMode, ass
 }
 
 export function buildCreativeWorkflowPlan(concept: string, referenceImageUrls: string[] = []): CreativeWorkflowPlan {
+  return buildCreativeWorkflowPlanWithPrompts(concept, referenceImageUrls);
+}
+
+export function buildCreativeWorkflowPlanWithPrompts(
+  concept: string,
+  referenceImageUrls: string[] = [],
+  promptOverrides?: PromptOverrides,
+): CreativeWorkflowPlan {
   const safeConcept = concept || 'a short video concept';
   const videoMode = inferVideoMode(safeConcept, referenceImageUrls);
-  const assets = inferAssetNeeds(safeConcept, videoMode, referenceImageUrls);
+  const assets = inferAssetNeeds(safeConcept, videoMode, referenceImageUrls, promptOverrides);
   const assetIds = assets.map((asset) => asset.id);
   const scenes = videoMode === 'product'
-    ? buildProductScenes(safeConcept, assetIds, referenceImageUrls)
-    : buildInfluencerScenes(safeConcept, assetIds, referenceImageUrls, videoMode);
+    ? buildProductScenes(safeConcept, assetIds, referenceImageUrls, promptOverrides)
+    : buildInfluencerScenes(safeConcept, assetIds, referenceImageUrls, videoMode, promptOverrides);
   const planId = `plan-${Date.now()}`;
   const consistencyReferences = buildConsistencyReferences(planId, videoMode, assets, scenes.map((sc) => sc.id));
   const isProduct = videoMode === 'product';
@@ -385,30 +405,11 @@ export function buildCreativeWorkflowPlan(concept: string, referenceImageUrls: s
       'Automatically reuse critical references during relevant future generations; ask before replacing critical identity or product references.',
     ],
     renderSettingsDeferred: true,
+    suggestedAspectRatio: '9:16',
+    suggestedDuration: scenes[scenes.length - 1]?.endTime ?? 20,
+    outputFormat: 'mp4',
+    approvalStatus: 'draft',
   };
 }
 
-export const BRAINSTORM_SYSTEM_PROMPT = `You are OpenScene's creative director. First understand the user's video idea, then plan the video like a production workflow.
-
-Do not ask for aspect ratio, duration, platform, fps, resolution, model, seed, or render settings first. Those come later in the render settings panel.
-
-Respond with a concise creative plan that covers:
-- what the video is about
-- whether this is product-first, influencer-first, hybrid, or general
-- target viewer
-- tone and style
-- reusable character, product, brand, logo, or environment assets needed first
-- scene structure
-- start/end frame direction
-- motion and camera direction
-- script or voiceover notes
-- consistency requirements and what must remain locked
-
-Rules:
-- For product videos, do not add human subjects unless the user explicitly asks for people, influencers, hands, models, or UGC.
-- For product videos, focus on product, environment, lighting, camera movement, brand style, props, composition, and product consistency.
-- For influencer videos, treat identity consistency as critical: same face, hairstyle, outfit, body style, and overall identity.
-- If scenes are visually related, keep background, lighting, environment, and visual continuity consistent.
-- If a reusable character, product, background, brand, or style reference is needed, explicitly say it should be generated before scenes.
-
-Keep the response actionable and invite the user to edit everything in Workflow.`;
+export const BRAINSTORM_SYSTEM_PROMPT = getDefaultPrompt('planning.chat.system');

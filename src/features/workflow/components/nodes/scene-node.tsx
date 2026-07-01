@@ -11,6 +11,7 @@ import { MoreHorizontal, Play, RotateCcw, Trash2, Sparkles, ImageIcon, Loader2 }
 import { AI_ACTIONS } from '../../lib/ai-actions';
 import { useWorkflowStore } from '@/features/workflow/store';
 import { useSettingsStore } from '@/features/settings/store';
+import { getPrompt } from '@/core/prompts';
 import { GenerationInfoPopover } from '@/features/workflow/components/generation-info-popover';
 import type { Scene } from '@/core/types';
 type WorkflowStyle = { border?: string; line?: string };
@@ -35,6 +36,7 @@ function SceneNodeComponent({ data, id }: NodeProps) {
   const workflowStyle = (data as unknown as { workflowStyle?: WorkflowStyle }).workflowStyle;
   const generateScene = useWorkflowStore((s) => s.generateScene);
   const inNodeLabels = useSettingsStore((s) => (s.settings.edgeLabelPlacement ?? 'in-node') === 'in-node');
+  const promptOverrides = useSettingsStore((s) => s.settings.promptOverrides);
   const [now, setNow] = useState(() => Date.now());
 
   const isGenerating = scene.status === 'generating' || scene.status === 'regenerating';
@@ -64,7 +66,13 @@ function SceneNodeComponent({ data, id }: NodeProps) {
   }, [id]);
 
   const handleAIAction = (action: string) => {
-    const enhanced = `${scene.prompt}, ${action === 'cinematic' ? 'dramatic cinematic lighting, shallow depth of field, film grain' : action === 'realistic' ? 'photorealistic, natural lighting, 4K quality' : action === 'viral' ? 'high energy, dynamic, attention-grabbing' : action === 'camera' ? 'smooth professional camera work' : 'enhanced visual quality, more detailed'}`;
+    const suffix =
+      action === 'cinematic' ? getPrompt('prompt.enhance.cinematic', promptOverrides) :
+      action === 'realistic' ? getPrompt('prompt.enhance.realistic', promptOverrides) :
+      action === 'viral' ? getPrompt('prompt.enhance.viral', promptOverrides) :
+      action === 'camera' ? getPrompt('prompt.enhance.camera', promptOverrides) :
+      'enhanced visual quality, more detailed';
+    const enhanced = `${scene.prompt}, ${suffix}`;
     handleUpdate({ prompt: enhanced });
   };
 
