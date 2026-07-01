@@ -1,285 +1,151 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
+import { MessageSquare, Workflow, Film } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useWorkflowStore } from '@/features/workflow';
 import { useProjectStore } from '@/features/project/store';
 import { useSettingsStore } from '@/features/settings/store';
-import { StatusBadge } from '@/shared/ui/status-badge';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
-import { Play, Download, Clock, Film, Volume2, Subtitles, Type, Workflow, MessageSquare, Scissors, Replace, GripHorizontal, Settings } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { useState } from 'react';
-
-const TRACK_TYPES = [
-  { id: 'video', label: 'Video', color: 'bg-blue-500/20 border-blue-500/40 text-blue-400', icon: Film },
-  { id: 'audio', label: 'Audio / Voiceover', color: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400', icon: Volume2 },
-  { id: 'caption', label: 'Captions', color: 'bg-amber-500/20 border-amber-500/40 text-amber-400', icon: Subtitles },
-  { id: 'overlay', label: 'Text Overlays', color: 'bg-purple-500/20 border-purple-500/40 text-purple-400', icon: Type },
-] as const;
+import { useTimelineStore } from './store/timeline-store';
+import { TimelineEditor } from './components/timeline-editor';
+import { PreviewPlayer } from './components/preview-player';
+import { AssetPanel } from './components/asset-panel';
+import { ClipEditorPanel } from './components/clip-editor-panel';
+import { ElementEditorPanel } from './components/element-editor-panel';
+import { ExportSummary } from './components/export-summary';
+import { totalProjectDuration, clipStartTimes } from './lib/types';
+import { aspectRatioToValue } from './lib/aspect';
 
 export function TimelineView() {
-  const { getScenes, getTotalDuration } = useWorkflowStore();
-  const { setPhase } = useProjectStore();
+  // Select raw state and derive scenes via memo so the snapshot is stable across renders.
+  const sceneOrder = useWorkflowStore((s) => s.sceneOrder);
+  const sceneMap = useWorkflowStore((s) => s.sceneMap);
+  const scenes = useMemo(
+    () => sceneOrder.map((id) => sceneMap[id]).filter(Boolean),
+    [sceneOrder, sceneMap],
+  );
+  const hydrateFromScenes = useTimelineStore((s) => s.hydrateFromScenes);
+  const setPhase = useProjectStore((s) => s.setPhase);
+  const project = useProjectStore((s) => s.getCurrentProject());
   const settings = useSettingsStore((s) => s.settings);
-  const scenes = getScenes();
-  const totalDuration = getTotalDuration();
-  const maxDuration = Math.max(totalDuration, 30);
-  const [selectedPreset, setSelectedPreset] = useState(settings.exportPresets[0]?.id || 'tiktok');
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
-  const preset = settings.exportPresets.find((p) => p.id === selectedPreset);
-  const completedScenes = scenes.filter((s) => s.status === 'completed').length;
-  const allCompleted = scenes.length > 0 && completedScenes === scenes.length;
+  const clips = useTimelineStore((s) => s.clips);
+  const audio = useTimelineStore((s) => s.audio);
+  const overlays = useTimelineStore((s) => s.overlays);
+  const selection = useTimelineStore((s) => s.selection);
+  const clearSelection = useTimelineStore((s) => s.clearSelection);
 
-  const handleExport = () => {
-    setIsExporting(true);
-    setExportProgress(0);
-    const interval = setInterval(() => {
-      setExportProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsExporting(false);
-          return 100;
-        }
-        return Math.min(100, prev + 14);
-      });
-    }, 450);
-  };
+  // Sync clips from workflow scenes whenever scenes change.
+  useEffect(() => {
+    hydrateFromScenes(scenes);
+  }, [scenes, hydrateFromScenes]);
 
-  // Generate time markers
-  const timeMarkers: number[] = [];
-  for (let t = 0; t <= maxDuration; t += 5) {
-    timeMarkers.push(t);
-  }
+  const aspectRatio = project?.settings.aspectRatio ?? settings.defaultAspectRatio;
+  const ratioValue = aspectRatioToValue(aspectRatio);
+
+  const starts = useMemo(() => clipStartTimes(clips), [clips]);
+  const selectedClip = selection?.type === 'clip'
+    ? clips.find((c) => c.id === selection.id) ?? null
+    : null;
+  const selectedClipIndex = selectedClip ? clips.findIndex((c) => c.id === selectedClip.id) : -1;
+
+  const selectedAudio = selection?.type === 'audio'
+    ? audio.find((a) => a.id === selection.id) ?? null
+    : null;
+  const selectedOverlay = selection?.type === 'overlay'
+    ? overlays.find((o) => o.id === selection.id) ?? null
+    : null;
+
+  const total = totalProjectDuration(clips);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-neutral-900 text-neutral-100">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Timeline</h2>
-            <p className="text-xs text-muted-foreground">{scenes.length} scenes · {totalDuration}s total</p>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-neutral-950/60 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-7 h-7 rounded-md bg-white/5 flex items-center justify-center">
+            <Film className="w-4 h-4 text-neutral-300" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold truncate">Timeline</h2>
+            <p className="text-[11px] text-neutral-500">
+              {clips.length} clip{clips.length === 1 ? '' : 's'} · {total.toFixed(1)}s total · {audio.length} audio · {overlays.length} element{overlays.length === 1 ? '' : 's'}
+            </p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPhase('chat')} className="gap-1.5">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="text-neutral-300 hover:bg-white/10 hover:text-white gap-1.5" onClick={() => setPhase('chat')}>
             <MessageSquare className="w-3.5 h-3.5" /> Plan
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setPhase('workflow')} className="gap-1.5">
+          <Button variant="ghost" size="sm" className="text-neutral-300 hover:bg-white/10 hover:text-white gap-1.5" onClick={() => setPhase('workflow')}>
             <Workflow className="w-3.5 h-3.5" /> Workflow
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Play className="w-3.5 h-3.5" /> Preview
-          </Button>
-          <Button size="sm" className="gap-1.5" onClick={handleExport} disabled={!allCompleted || isExporting}>
-            <Download className="w-3.5 h-3.5" /> Export
           </Button>
         </div>
       </div>
 
-      {/* Timeline Content */}
-      <ScrollArea className="flex-1">
-        <div className="min-w-[800px] p-6">
-          {/* Time Ruler */}
-          <div className="relative mb-1 ml-[140px]">
-            <div className="h-6 relative border-b border-border">
-              {timeMarkers.map(t => (
-                <div
-                  key={t}
-                  className="absolute text-[10px] text-muted-foreground -translate-x-1/2"
-                  style={{ left: `${(t / maxDuration) * 100}%` }}
-                >
-                  <div className="w-px h-3 bg-border mx-auto" />
-                  <span className="mt-0.5 block">{t}s</span>
+      {/* Workspace */}
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left: Asset panel */}
+          <ResizablePanel defaultSize={18} minSize={14} maxSize={26}>
+            <AssetPanel />
+          </ResizablePanel>
+          <ResizableHandle withHandle className="w-1 bg-white/5 hover:bg-white/15 transition-colors" />
+
+          {/* Center: Preview + Export stacked */}
+          <ResizablePanel defaultSize={56} minSize={36}>
+            <ResizablePanelGroup direction="vertical" className="h-full">
+              <ResizablePanel defaultSize={62} minSize={30}>
+                <PreviewPlayer aspectRatio={ratioValue} />
+              </ResizablePanel>
+              <ResizableHandle withHandle className="h-1 bg-white/5 hover:bg-white/15 transition-colors" />
+              <ResizablePanel defaultSize={38} minSize={20}>
+                <div className="h-full overflow-auto p-3 bg-neutral-950/30">
+                  <ExportSummary />
                 </div>
-              ))}
-            </div>
-          </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+          <ResizableHandle withHandle className="w-1 bg-white/5 hover:bg-white/15 transition-colors" />
 
-          {/* Tracks */}
-          <div className="space-y-2">
-            {TRACK_TYPES.map(track => {
-              const trackScenes = track.id === 'video' ? scenes : scenes.filter(s => {
-                if (track.id === 'audio') return s.narration || s.generatedAudioUrl;
-                if (track.id === 'caption') return s.captions;
-                if (track.id === 'overlay') return s.textOverlays?.length > 0;
-                return false;
-              });
+          {/* Right: Editor panel */}
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={36}>
+            {selectedClip ? (
+              <ClipEditorPanel
+                clip={selectedClip}
+                clipIndex={selectedClipIndex}
+                totalClips={clips.length}
+              />
+            ) : selectedAudio ? (
+              <ElementEditorPanel selection={{ type: 'audio', item: selectedAudio }} />
+            ) : selectedOverlay ? (
+              <ElementEditorPanel selection={{ type: 'overlay', item: selectedOverlay }} />
+            ) : (
+              <EmptyRightPanel />
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
 
-              return (
-                <div key={track.id} className="flex items-center gap-3">
-                  {/* Track Label */}
-                  <div className="w-[128px] shrink-0 flex items-center gap-2 px-3 py-2">
-                    <track.icon className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs font-medium">{track.label}</span>
-                  </div>
-
-                  {/* Track Content */}
-                  <div className="flex-1 h-[44px] bg-muted/20 rounded-lg border border-border/50 relative overflow-hidden">
-                    {track.id === 'video' ? (
-                      <>
-                        {scenes.map(scene => (
-                          <div
-                            key={scene.id}
-                            className="absolute top-1 bottom-1 rounded-md border border-border/80 cursor-pointer hover:z-10 hover:shadow-lg transition-shadow group"
-                            style={{
-                              left: `${(scene.startTime / maxDuration) * 100}%`,
-                              width: `${(scene.duration / maxDuration) * 100}%`,
-                              minWidth: '40px',
-                            }}
-                          >
-                            <div className={`h-full rounded-md px-2 flex items-center justify-between gap-1 ${track.color} border`}>
-                              <span className="text-[10px] font-medium truncate">{scene.title}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <StatusBadge status={scene.status} size="sm" />
-                              </div>
-                            </div>
-                            {/* Transition indicator */}
-                            {scene.transition !== 'cut' && scene.order < scenes.length - 1 && (
-                              <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary/50 border border-primary flex items-center justify-center z-20">
-                                <span className="text-[6px]">→</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </>
-                    ) : (
-                      trackScenes.map(scene => (
-                        <div
-                          key={scene.id}
-                          className="absolute top-1 bottom-1 rounded-md cursor-pointer hover:z-10 transition-shadow"
-                          style={{
-                            left: `${(scene.startTime / maxDuration) * 100}%`,
-                            width: `${(scene.duration / maxDuration) * 100}%`,
-                            minWidth: '40px',
-                          }}
-                        >
-                          <div className={`h-full rounded-md px-2 flex items-center ${track.color} border`}>
-                            <span className="text-[10px] truncate">
-                              {track.id === 'audio' ? '🎤 ' : track.id === 'caption' ? '💬 ' : '📝 '}
-                              {scene.title}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-
-                    {/* Playhead */}
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: '0%' }}>
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-500 rounded-full" />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Scene Details Below Timeline */}
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold mb-3">Scene Breakdown</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {scenes.map(scene => (
-                <div key={scene.id} className="bg-card border border-border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold">#{scene.order + 1} {scene.title}</span>
-                    <StatusBadge status={scene.status} />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground line-clamp-2">{scene.prompt}</p>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <Clock className="w-3 h-3" />
-                    <span>{scene.startTime}s → {scene.endTime}s</span>
-                    <Badge variant="outline" className="text-[9px] h-4">{scene.transition?.replace(/_/g,' ')}</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
-                      <Scissors className="w-3 h-3" /> Trim
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
-                      <GripHorizontal className="w-3 h-3" /> Move
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1">
-                      <Replace className="w-3 h-3" /> Replace
-                    </Button>
-                  </div>
-                  {scene.narration && (
-                    <p className="text-[10px] text-muted-foreground italic line-clamp-1">🎤 {scene.narration}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2"><Settings className="w-4 h-4" /> Export Options</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Preset</label>
-                  <Select value={selectedPreset} onValueChange={setSelectedPreset}>
-                    <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {settings.exportPresets.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {preset && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 rounded-lg border border-border bg-muted/20 p-3">
-                    <ExportField label="Resolution" value={preset.resolution} />
-                    <ExportField label="Aspect Ratio" value={preset.aspectRatio} />
-                    <ExportField label="Format" value={preset.format.toUpperCase()} />
-                    <ExportField label="Quality" value={preset.quality} />
-                    <ExportField label="FPS" value={`${preset.fps}`} />
-                    <ExportField label="Max Duration" value={`${preset.maxDuration}s`} />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Final Render</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Scenes ready</span>
-                  <span>{completedScenes}/{scenes.length}</span>
-                </div>
-                <Progress value={scenes.length ? (completedScenes / scenes.length) * 100 : 0} className="h-1.5" />
-                {isExporting && (
-                  <>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Export progress</span>
-                      <span>{Math.round(exportProgress)}%</span>
-                    </div>
-                    <Progress value={exportProgress} className="h-1.5" />
-                  </>
-                )}
-                <Button className="w-full gap-2" onClick={handleExport} disabled={!allCompleted || isExporting}>
-                  <Download className="w-4 h-4" />
-                  {allCompleted ? 'Export Final Video' : 'Complete connected scenes first'}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </ScrollArea>
+      {/* Bottom timeline */}
+      <div className="h-[280px] shrink-0 border-t border-white/5" onClick={() => { if (selection) clearSelection(); }}>
+        <TimelineEditor />
+      </div>
     </div>
   );
 }
 
-function ExportField({ label, value }: { label: string; value: string }) {
+function EmptyRightPanel() {
   return (
-    <div>
-      <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="text-sm font-medium capitalize">{value}</div>
+    <div className="h-full flex flex-col items-center justify-center text-center bg-neutral-950/40 border-l border-white/5 p-6">
+      <div className="w-10 h-10 rounded-md bg-white/5 flex items-center justify-center mb-3">
+        <Film className="w-5 h-5 text-neutral-500" />
+      </div>
+      <div className="text-xs font-medium text-neutral-300">Nothing selected</div>
+      <p className="text-[11px] text-neutral-500 mt-1 max-w-[200px]">
+        Click a clip on the timeline to edit trim, audio, prompt, and regeneration.
+        Click an audio or overlay block to tweak its settings.
+      </p>
     </div>
   );
 }
