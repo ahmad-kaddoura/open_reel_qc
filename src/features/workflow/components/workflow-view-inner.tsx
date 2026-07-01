@@ -6,7 +6,6 @@ import {
   Background,
   Controls,
   MiniMap,
-  addEdge,
   useNodesState,
   useEdgesState,
   type Connection,
@@ -43,10 +42,56 @@ import { PromptInputNode } from './nodes/prompt-input-node';
 import { MotionControlNode } from './nodes/motion-control-node';
 import { MotionOutputNode } from './nodes/motion-output-node';
 import { buildWorkflowGraph } from '../graph/workflow-graph';
-import { ADD_NODE_OPTIONS } from '../graph/workflow-node-catalog';
+import { ADD_NODE_OPTIONS, type WorkflowNodeKind } from '../graph/workflow-node-catalog';
 import { useWorkflowNodeContextMenu } from './menus/node-context-menu';
 import { useWorkflowPaneMenu } from './menus/pane-menu';
 import { useSettingsStore } from '@/features/settings/store';
+
+type FlowPoint = { x: number; y: number };
+
+function eventClientPoint(event: MouseEvent | TouchEvent): FlowPoint {
+  if ('clientX' in event) return { x: event.clientX, y: event.clientY };
+  const touch = event.changedTouches[0] ?? event.touches[0];
+  return { x: touch.clientX, y: touch.clientY };
+}
+
+function motionIdFromNodeId(nodeId: string) {
+  return nodeId.startsWith('motion-control-')
+    ? nodeId.slice('motion-control-'.length)
+    : null;
+}
+
+const allowedTargetHandles: Record<string, string[]> = {
+  'motion-image-in': ['motion-image-out'],
+  'motion-video-in': ['motion-video-out'],
+  'motion-prompt-in': ['motion-prompt-out'],
+  'motion-parameters-in': ['parameters-out'],
+  'motion-output-in': ['motion-output-out'],
+  'parameters-in': ['parameters-out'],
+  'script-in': ['script-out'],
+  'frames-in': ['frames-out'],
+  'asset-in': ['asset-out'],
+  'flow-in': ['flow-out'],
+  'output-in': ['output-out'],
+};
+
+function handlesAreCompatible(sourceHandle?: string | null, targetHandle?: string | null) {
+  if (!sourceHandle || !targetHandle) return false;
+  return (
+    allowedTargetHandles[targetHandle]?.includes(sourceHandle) ||
+    allowedTargetHandles[sourceHandle]?.includes(targetHandle) ||
+    false
+  );
+}
+
+function invalidConnectionEndedOnHandle(connectionState: any) {
+  return Boolean(
+    connectionState.toHandle ||
+    connectionState.toHandleId ||
+    connectionState.toNode ||
+    connectionState.toNodeId,
+  );
+}
 
 const nodeTypes: NodeTypes = {
   scene: SceneNode,
@@ -137,12 +182,14 @@ export function WorkflowViewInner() {
   const noteNodes = useWorkflowStore((s) => s.noteNodes);
   const motionControls = useWorkflowStore((s) => s.motionControls);
   const inputNodes = useWorkflowStore((s) => s.inputNodes);
+  const workflowConnections = useWorkflowStore((s) => s.workflowConnections);
   const updateScene = useWorkflowStore((s) => s.updateScene);
   const generateAllScenes = useWorkflowStore((s) => s.generateAllScenes);
   const isGeneratingAll = useWorkflowStore((s) => s.isGeneratingAll);
   const getTotalDuration = useWorkflowStore((s) => s.getTotalDuration);
   const setNodePosition = useWorkflowStore((s) => s.setNodePosition);
   const addNodeAt = useWorkflowStore((s) => s.addNodeAt);
+  const addWorkflowConnection = useWorkflowStore((s) => s.addWorkflowConnection);
   const applyAutoLayout = useWorkflowStore((s) => s.applyAutoLayout);
   const loadLayoutForProject = useWorkflowStore((s) => s.loadLayoutForProject);
   const edgeLabelPlacement = useSettingsStore((s) => s.settings.edgeLabelPlacement ?? 'in-node');
@@ -205,8 +252,9 @@ export function WorkflowViewInner() {
       noteNodes,
       motionControls,
       inputNodes,
+      workflowConnections,
     ),
-    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles, noteNodes, motionControls, inputNodes],
+    [graphKey, nodePositions, scenes, edgeLabelPlacement, hiddenNodeIds, currentProject?.creativePlan?.reusableAssets, nodeColorStyles, noteNodes, motionControls, inputNodes, workflowConnections],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphNodes);
@@ -218,33 +266,133 @@ export function WorkflowViewInner() {
   }, [graphNodes, graphEdges, setNodes, setEdges]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    (params: Connection) => {
+      if (!params.source || !params.target) return;
+      if (!handlesAreCompatible(params.sourceHandle, params.targetHandle)) return;
+      addWorkflowConnection({
+        source: params.source,
+        sourceHandle: params.sourceHandle,
+        target: params.target,
+        targetHandle: params.targetHandle,
+      });
+    },
+    [addWorkflowConnection],
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Connection) => handlesAreCompatible(connection.sourceHandle, connection.targetHandle),
+    [],
   );
 
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: any) => {
-      if (!connectionState.isValid) {
-        const { fromNode, fromHandle } = connectionState;
-        if (fromHandle?.id === 'motion-prompt-in' || fromHandle?.id === 'motion-prompt-out') {
-          const position = rfRef.current?.screenToFlowPosition({
-            x: 'clientX' in event ? event.clientX : event.touches[0].clientX,
-            y: 'clientY' in event ? event.clientY : event.touches[0].clientY,
-          }) ?? { x: 120, y: 120 };
-          const newId = addNodeAt('prompt-input', position);
-          
-          if (fromNode && newId) {
-            setEdges((eds) => addEdge({
-              source: fromHandle?.id === 'motion-prompt-out' ? fromNode.id : newId,
-              sourceHandle: 'motion-prompt-out',
-              target: fromHandle?.id === 'motion-prompt-out' ? newId : fromNode.id,
-              targetHandle: 'motion-prompt-in',
-            }, eds));
-          }
-        }
+      if (connectionState.isValid) return;
+      if (invalidConnectionEndedOnHandle(connectionState)) return;
+      const { fromNode, fromHandle } = connectionState;
+      if (!fromNode || !fromHandle?.id) return;
+
+      const clientPoint = eventClientPoint(event);
+      const position = rfRef.current?.screenToFlowPosition(clientPoint) ?? { x: 120, y: 120 };
+      const handleId = fromHandle.id as string;
+
+      const addConnectedNode = (kind: WorkflowNodeKind, sourceHandle: string, targetHandle: string, targetNodeId = fromNode.id) => {
+        const newId = addNodeAt(kind, position, targetNodeId);
+        if (!newId) return;
+        addWorkflowConnection({
+          source: newId,
+          sourceHandle,
+          target: targetNodeId,
+          targetHandle,
+        });
+      };
+
+      const addConnectedScene = (sourceNodeId: string, sourceHandle: string, targetHandle: string) => {
+        const newId = addNodeAt('scene', position);
+        if (!newId) return;
+        addWorkflowConnection({
+          source: sourceNodeId,
+          sourceHandle,
+          target: newId,
+          targetHandle,
+        });
+      };
+
+      const addSceneInputNode = (kind: Extract<WorkflowNodeKind, 'parameters' | 'script' | 'frames'>) => {
+        addNodeAt(kind, position, fromNode.id);
+      };
+
+      if (handleId === 'motion-image-in') {
+        addConnectedNode('image-input', 'motion-image-out', 'motion-image-in');
+        return;
+      }
+      if (handleId === 'motion-video-in') {
+        addConnectedNode('video-input', 'motion-video-out', 'motion-video-in');
+        return;
+      }
+      if (handleId === 'motion-prompt-in') {
+        addConnectedNode('prompt-input', 'motion-prompt-out', 'motion-prompt-in');
+        return;
+      }
+      if (handleId === 'motion-parameters-in') {
+        const motionId = motionIdFromNodeId(fromNode.id);
+        if (!motionId) return;
+        const newId = `motion-parameters-${motionId}`;
+        setNodePosition(newId, position);
+        addWorkflowConnection({
+          source: newId,
+          sourceHandle: 'parameters-out',
+          target: fromNode.id,
+          targetHandle: 'motion-parameters-in',
+        });
+        return;
+      }
+
+      if (handleId === 'parameters-in') {
+        addSceneInputNode('parameters');
+        return;
+      }
+      if (handleId === 'script-in') {
+        addSceneInputNode('script');
+        return;
+      }
+      if (handleId === 'frames-in') {
+        addSceneInputNode('frames');
+        return;
+      }
+
+      if (handleId === 'motion-image-out') {
+        const newId = addNodeAt('motion-control', position);
+        if (newId) addWorkflowConnection({ source: fromNode.id, sourceHandle: 'motion-image-out', target: newId, targetHandle: 'motion-image-in' });
+        return;
+      }
+      if (handleId === 'motion-video-out') {
+        const newId = addNodeAt('motion-control', position);
+        if (newId) addWorkflowConnection({ source: fromNode.id, sourceHandle: 'motion-video-out', target: newId, targetHandle: 'motion-video-in' });
+        return;
+      }
+      if (handleId === 'motion-prompt-out') {
+        const newId = addNodeAt('motion-control', position);
+        if (newId) addWorkflowConnection({ source: fromNode.id, sourceHandle: 'motion-prompt-out', target: newId, targetHandle: 'motion-prompt-in' });
+        return;
+      }
+
+      if (handleId === 'parameters-out') {
+        addConnectedScene(fromNode.id, 'parameters-out', 'parameters-in');
+        return;
+      }
+      if (handleId === 'script-out') {
+        addConnectedScene(fromNode.id, 'script-out', 'script-in');
+        return;
+      }
+      if (handleId === 'frames-out') {
+        addConnectedScene(fromNode.id, 'frames-out', 'frames-in');
+        return;
+      }
+      if (handleId === 'flow-out') {
+        addConnectedScene(fromNode.id, 'flow-out', 'flow-in');
       }
     },
-    [addNodeAt, setEdges]
+    [addNodeAt, addWorkflowConnection, setNodePosition]
   );
 
   const handleNodeDataChange = useCallback((nodeId: string, newData: Partial<import('@/core/types').Scene>) => {
@@ -287,6 +435,7 @@ export function WorkflowViewInner() {
       notes: noteNodes,
       motionControls,
       inputs: inputNodes,
+      connections: workflowConnections,
       reusableAssets: currentProject?.creativePlan?.reusableAssets ?? [],
       layout: {
         positions: { ...nodePositions, ...canvasPositions },
@@ -300,7 +449,7 @@ export function WorkflowViewInner() {
         edges,
       },
     };
-  }, [currentProject, currentProjectId, edges, hiddenNodeIds, motionControls, inputNodes, nodeColorStyles, nodePositions, nodes, noteNodes, scenes, shownOutputSceneIds]);
+  }, [currentProject, currentProjectId, edges, hiddenNodeIds, motionControls, inputNodes, workflowConnections, nodeColorStyles, nodePositions, nodes, noteNodes, scenes, shownOutputSceneIds]);
 
   const handleExportWorkflow = useCallback((format: 'json' | 'xml') => {
     const snapshot = buildExportSnapshot();
@@ -336,6 +485,7 @@ export function WorkflowViewInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           onConnectEnd={onConnectEnd}
           onNodeDragStop={onNodeDragStop}
           onNodeContextMenu={handleNodeContextMenu}

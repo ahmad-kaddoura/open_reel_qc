@@ -18,6 +18,7 @@ import {
   type WorkflowNote,
   type WorkflowMotionControl,
   type WorkflowInput,
+  type WorkflowConnection,
 } from './workflow-layout';
 
 export {
@@ -41,6 +42,7 @@ const C_ASSET = '#22d3ee';
 const C_MOTION_IMAGE = '#38bdf8';
 const C_MOTION_VIDEO = '#f97316';
 const C_MOTION_PROMPT = '#c084fc';
+const C_MOTION_PARAMETERS = '#f59e0b';
 const C_MOTION_OUTPUT = '#22c55e';
 const C_OUTPUT_OK = '#22c55e';
 const C_OUTPUT_FAIL = '#ef4444';
@@ -59,6 +61,19 @@ function edgeLabels(text: string, color: string, onEdge: boolean): EdgeExtras {
   };
 }
 
+function connectionVisual(sourceHandle?: string | null, targetHandle?: string | null) {
+  const handle = targetHandle ?? sourceHandle ?? '';
+  if (handle.includes('image')) return { color: C_MOTION_IMAGE, label: 'image' };
+  if (handle.includes('video') && !handle.includes('output')) return { color: C_MOTION_VIDEO, label: 'video' };
+  if (handle.includes('prompt')) return { color: C_MOTION_PROMPT, label: 'prompt' };
+  if (handle.includes('parameters')) return { color: C_MOTION_PARAMETERS, label: 'parameters' };
+  if (handle.includes('script')) return { color: C_SCRIPT, label: 'script' };
+  if (handle.includes('frames')) return { color: C_FRAMES, label: 'frames' };
+  if (handle.includes('asset')) return { color: C_ASSET, label: 'asset' };
+  if (handle.includes('output')) return { color: C_MOTION_OUTPUT, label: 'output' };
+  return { color: FLOW_STROKE, label: 'connection' };
+}
+
 export function buildWorkflowGraph(
   scenes: Scene[],
   savedPositions: NodePositions | null = null,
@@ -69,6 +84,7 @@ export function buildWorkflowGraph(
   notes: WorkflowNote[] = [],
   motionControls: WorkflowMotionControl[] = [],
   inputs: WorkflowInput[] = [],
+  connections: WorkflowConnection[] = [],
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -114,6 +130,7 @@ export function buildWorkflowGraph(
       image: `motion-image-${motion.id}`,
       video: `motion-video-${motion.id}`,
       prompt: `motion-prompt-${motion.id}`,
+      parameters: `motion-parameters-${motion.id}`,
       control: `motion-control-${motion.id}`,
       output: `motion-output-${motion.id}`,
     };
@@ -122,9 +139,13 @@ export function buildWorkflowGraph(
       [ids.image]: { x: base.x - 280, y: base.y - 170 },
       [ids.video]: { x: base.x - 280, y: base.y + 10 },
       [ids.prompt]: { x: base.x - 280, y: base.y + 190 },
+      [ids.parameters]: { x: base.x - 280, y: base.y + 370 },
       [ids.control]: base,
       [ids.output]: { x: base.x + 340, y: base.y },
     };
+    const hasParameterNode = connections.some((connection) =>
+      connection.source === ids.parameters || connection.target === ids.parameters,
+    );
 
     ([
       [ids.image, 'imageInput'],
@@ -141,6 +162,15 @@ export function buildWorkflowGraph(
         data: { motionId: motion.id, workflowStyle: workflowStyle(id) },
       });
     });
+
+    if (hasParameterNode && visible(ids.parameters)) {
+      nodes.push({
+        id: ids.parameters,
+        type: 'parameters',
+        position: savedPositions?.[ids.parameters] ?? fallback[ids.parameters],
+        data: { motionId: motion.id, workflowStyle: workflowStyle(ids.parameters) },
+      });
+    }
 
     [
       [ids.image, 'motion-image-out', 'motion-image-in', 'reference image', C_MOTION_IMAGE],
@@ -372,6 +402,25 @@ export function buildWorkflowGraph(
       });
     });
   }
+
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  connections.forEach((connection) => {
+    if (!nodeIds.has(connection.source) || !nodeIds.has(connection.target)) return;
+    if (!link(connection.source, connection.target)) return;
+    const visual = connectionVisual(connection.sourceHandle, connection.targetHandle);
+    const stroke = edgeStyle(connection.source, connection.target, visual.color);
+    edges.push({
+      id: connection.id,
+      source: connection.source,
+      sourceHandle: connection.sourceHandle,
+      target: connection.target,
+      targetHandle: connection.targetHandle,
+      type: 'smoothstep',
+      style: { stroke, strokeWidth: 1.8, opacity: 0.82 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
+      ...edgeLabels(visual.label, visual.color, onEdge),
+    });
+  });
 
   return { nodes, edges };
 }

@@ -195,6 +195,14 @@ export type WorkflowInput = {
   negativePrompt?: string;
 };
 
+export type WorkflowConnection = {
+  id: string;
+  source: string;
+  sourceHandle?: string | null;
+  target: string;
+  targetHandle?: string | null;
+};
+
 type LegacyWorkflowInput = Omit<WorkflowInput, 'kind'> & {
   kind: WorkflowInputKind | 'reference-image' | 'reference-video' | 'motion-prompt';
 };
@@ -208,6 +216,7 @@ export type WorkflowLayout = {
   motionControls?: WorkflowMotionControl[];
   inputs?: WorkflowInput[];
   motionInputs?: WorkflowInput[];
+  connections?: WorkflowConnection[];
 };
 
 function isLegacyPositions(value: unknown): value is NodePositions {
@@ -228,6 +237,7 @@ function normalizeLayout(raw: unknown): WorkflowLayout | null {
       nodeColors: layout.nodeColors ?? {},
       notes: layout.notes ?? [],
       motionControls: layout.motionControls ?? [],
+      connections: layout.connections ?? [],
       inputs: ((layout.inputs ?? layout.motionInputs ?? []) as LegacyWorkflowInput[]).map((input) => ({
         ...input,
         kind: input.kind === 'reference-image'
