@@ -10,11 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { SpinnerIcon } from '@/components/ui/spinner-icon';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Send, Boxes, Workflow, Wand2, Eye, SlidersHorizontal, Paperclip, X, ArrowRight, ArrowRightLeft } from 'lucide-react';
-import { renderGenerativeUI, ProductionProgressRail } from './generative-ui';
+import { Send, Boxes, Workflow, Wand2, Eye, SlidersHorizontal, Paperclip, X, ArrowRightLeft } from 'lucide-react';
+import { renderGenerativeUI } from './generative-ui';
 import { VideoConfigPanel } from './video-config-panel';
 import ReactMarkdown from 'react-markdown';
-import type { ChatAttachment, CreativeWorkflowPlan, GenerativeUIComponent, ProductionStep, ReusableAssetPlan, Scene, VideoBrief, VideoScript } from '@/core/types';
+import type { ChatAttachment, CreativeWorkflowPlan, GenerativeUIComponent, ReusableAssetPlan, Scene, VideoBrief, VideoScript } from '@/core/types';
 
 const STARTER_PROMPTS = [
   'Product ad for my skincare line — premium, no people',
@@ -92,7 +92,6 @@ export function ChatView() {
   const influencerReady = chatPhase === 'influencer_ready';
   const backgroundReady = chatPhase === 'background_ready';
   const framesReady = chatPhase === 'frames_ready';
-  const productionStep = (currentProject?.productionStep ?? (lastAssistant?.metadata?.productionStep as ProductionStep | undefined)) as ProductionStep | undefined;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -350,8 +349,6 @@ export function ChatView() {
     }
   };
 
-  const stagedActive: ProductionStep | undefined = productionStep ?? (scriptReady ? 'script' : influencerReady ? 'influencer' : backgroundReady ? 'background' : framesReady ? 'frames' : undefined);
-
   const inputPlaceholder = workflowReady
     ? 'Refine the workflow — ask for scene, asset, prompt, or motion changes…'
     : framesReady
@@ -483,59 +480,9 @@ export function ChatView() {
         </div>
       </ScrollArea>
 
-      {/* Production progress rail */}
-      {stagedActive && (
-        <div className="px-4 pb-2 shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <ProductionProgressRail current={stagedActive} />
-          </div>
-        </div>
-      )}
-
-      {/* Next steps banner after a creative workflow is ready */}
-      {(planReady || assetsReady || workflowReady) && (
-        <div className="px-4 pb-2 shrink-0">
-          <div className="max-w-3xl mx-auto rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs text-muted-foreground">
-              <span className="text-foreground font-medium">
-                {planReady ? 'Plan ready for approval.' : assetsReady ? 'Assets and frames ready.' : 'Workflow ready.'}
-              </span>{' '}
-              {planReady
-                ? 'Approve it to generate reusable source-of-truth assets before frames or videos.'
-                : assetsReady
-                  ? 'Confirm parameters, save reusable images, or open Workflow when approved.'
-                  : 'Edit assets, scenes, frames, scripts, prompts, and motion before final render settings.'}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              {planReady ? (
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => handleSend('I approve this plan. Generate the required source-of-truth assets step by step.')}
-                  disabled={isStreaming}
-                >
-                  <Boxes className="w-3 h-3" /> Approve Plan
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => handleSend('Review the consistency references and improve the production plan before Workflow.')}
-                    disabled={isStreaming}
-                  >
-                    <Boxes className="w-3 h-3" /> Review References
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setPhase('workflow')}>
-                    Workflow <ArrowRight className="w-3 h-3" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Production progress + next-step actions live in the Details panel and
+          inside the generative UI cards (e.g. Approve Plan, Approve Frames →
+          Open Workflow), so we don't duplicate them as a banner here. */}
 
       {messages.length > 0 && !planReady && !assetsReady && !workflowReady && (
         <div className="px-4 pb-2 shrink-0">
