@@ -303,7 +303,7 @@ function AgentHome() {
   };
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(45,212,191,0.22),transparent_34%),linear-gradient(180deg,#f8fafc_0%,#ffffff_42%,#f8fafc_100%)]">
+    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_top,rgba(45,212,191,0.22),transparent_34%),linear-gradient(180deg,#f8fafc_0%,#ffffff_42%,#f8fafc_100%)]">
       <TopActions />
       <ScrollArea className="h-full">
         <div className="mx-auto flex min-h-full max-w-6xl flex-col px-8 pb-12 pt-16">
@@ -423,7 +423,7 @@ function AgentWorkspace({
   const contentMode = project.currentPhase === "workflow" || project.currentPhase === "timeline";
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-slate-50">
       <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white/92 px-4 py-3 backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           {onToggleProjectRail && !projectRailOpen && (
@@ -472,14 +472,20 @@ function AgentWorkspace({
               defaultSize={28}
               minSize={18}
               maxSize={46}
-              className="min-w-0 border-r border-slate-200 bg-white"
+              className="min-w-0 overflow-hidden border-r border-slate-200 bg-white"
             >
               <ChatView />
             </ResizablePanel>
             <ResizableHandle id="agent-chat-resize" className="bg-slate-200" />
           </>
         )}
-        <ResizablePanel id="agent-stage" order={2} defaultSize={inspectorOpen ? (chatOpen ? 50 : 78) : chatOpen ? 72 : 100} minSize={34}>
+        <ResizablePanel
+          id="agent-stage"
+          order={2}
+          defaultSize={inspectorOpen ? (chatOpen ? 50 : 78) : chatOpen ? 72 : 100}
+          minSize={34}
+          className="min-w-0 overflow-hidden"
+        >
           <main className="h-full min-w-0 overflow-hidden bg-white">
             {project.currentPhase === "workflow" ? (
               <WorkflowView />
@@ -499,7 +505,7 @@ function AgentWorkspace({
               defaultSize={22}
               minSize={16}
               maxSize={36}
-              className="min-w-0 border-l border-slate-200 bg-white"
+              className="min-w-0 overflow-hidden border-l border-slate-200 bg-white"
             >
               <WorkspaceInspector project={project} progress={progress} />
             </ResizablePanel>
@@ -550,7 +556,7 @@ function ArtifactPreview({
 
   return (
     <ScrollArea className="h-full">
-      <div className={`mx-auto px-5 py-5 md:px-7 ${spacious ? "max-w-7xl" : compact ? "max-w-4xl" : "max-w-6xl"}`}>
+      <div className={`@container mx-auto px-5 py-5 md:px-7 ${spacious ? "max-w-7xl" : compact ? "max-w-5xl" : "max-w-6xl"}`}>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <Badge variant="outline" className="mb-2 border-cyan-200 bg-cyan-50 text-cyan-700">
@@ -565,7 +571,7 @@ function ArtifactPreview({
           <NextAction project={project} />
         </div>
 
-        <div className={`grid gap-5 ${compact ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(420px,1.2fr)_minmax(320px,0.8fr)]"}`}>
+        <div className="grid gap-5 @2xl:grid-cols-[minmax(360px,1.2fr)_minmax(280px,0.8fr)]">
           <section className="overflow-hidden rounded-[8px] border border-slate-200 bg-slate-950 shadow-sm">
             <div className="relative aspect-video bg-slate-900">
               {sceneFrameUrl(heroScene) ? (
@@ -607,7 +613,7 @@ function ArtifactPreview({
             <h3 className="font-semibold text-slate-950">Scene continuity</h3>
             <Badge variant="outline">{project.storyboard?.scenes.length ?? 0} scenes</Badge>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 @sm:grid-cols-2 @xl:grid-cols-3">
             {(project.storyboard?.scenes ?? plan?.scenes ?? []).map((scene) => (
               <SceneArtifact key={scene.id} scene={scene} />
             ))}
@@ -623,7 +629,7 @@ function ArtifactPreview({
               <h3 className="font-semibold text-slate-950">Script review</h3>
               <Badge variant={script.approvalStatus === "approved" ? "default" : "secondary"}>{script.approvalStatus}</Badge>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 @lg:grid-cols-2">
               {script.scenes.map((scene) => (
                 <div key={scene.id} className="rounded-[8px] border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-1 flex items-center justify-between gap-2">

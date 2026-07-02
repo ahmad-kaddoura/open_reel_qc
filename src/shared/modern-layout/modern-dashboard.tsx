@@ -50,7 +50,7 @@ export function ModernDashboard({ onToggleClassic }: ModernDashboardProps) {
   };
 
   const renderHome = () => (
-    <ResizablePanelGroup direction="horizontal" className="min-w-0 flex-1">
+    <ResizablePanelGroup direction="horizontal" className="min-h-0 min-w-0 flex-1 overflow-hidden">
       {projectRailOpen && (
         <>
           <ResizablePanel
@@ -59,14 +59,20 @@ export function ModernDashboard({ onToggleClassic }: ModernDashboardProps) {
             defaultSize={20}
             minSize={14}
             maxSize={32}
-            className="min-w-0"
+            className="min-w-0 overflow-hidden"
           >
             <ModernSubSidebar onToggle={() => setProjectRailOpen(false)} />
           </ResizablePanel>
           <ResizableHandle id="workspace-rail-resize" className="bg-slate-200" />
         </>
       )}
-      <ResizablePanel id="workspace-main" order={2} defaultSize={projectRailOpen ? 80 : 100} minSize={50}>
+      <ResizablePanel
+        id="workspace-main"
+        order={2}
+        defaultSize={projectRailOpen ? 80 : 100}
+        minSize={50}
+        className="min-w-0 overflow-hidden"
+      >
         <ModernMainContent
           projectRailOpen={projectRailOpen}
           onToggleProjectRail={() => setProjectRailOpen((value) => !value)}
