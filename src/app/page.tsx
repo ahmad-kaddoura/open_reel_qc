@@ -19,9 +19,13 @@ import { BrandKitView } from "@/features/brand-kit/brand-kit-view";
 import { AssetLibraryView } from "@/features/assets/asset-library-view";
 import { UsageView } from "@/features/usage/usage-view";
 import { ModernDashboard } from "@/shared/modern-layout/modern-dashboard";
+import { usePersistedState } from "@/shared/lib/use-persisted-state";
 import type { ProjectPhase } from "@/core/types";
 
 type AppView = "project" | "settings" | "brandkit" | "assets" | "usage";
+
+const CLASSIC_PANELS_STORAGE_KEY = "openscene-layout:classic-panels";
+const CLASSIC_SIDEBAR_COLLAPSED_KEY = "openscene-layout:classic-sidebar-collapsed";
 
 function normalizePhase(phase: ProjectPhase): ProjectPhase {
   if (phase === "brief" || phase === "storyboard") return "chat";
@@ -37,7 +41,10 @@ function ClassicDashboard() {
   const [activeView, setActiveView] = useState<AppView>(() =>
     currentProjectId ? "project" : "project",
   );
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = usePersistedState(
+    CLASSIC_SIDEBAR_COLLAPSED_KEY,
+    false,
+  );
 
   // Load projects on mount
   useEffect(() => {
@@ -99,7 +106,11 @@ function ClassicDashboard() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background flex relative">
-      <ResizablePanelGroup direction="horizontal" className="h-full">
+      <ResizablePanelGroup
+        direction="horizontal"
+        autoSaveId={CLASSIC_PANELS_STORAGE_KEY}
+        className="h-full"
+      >
         <ResizablePanel
           defaultSize={sidebarCollapsed ? 3 : 18}
           minSize={sidebarCollapsed ? 3 : 14}

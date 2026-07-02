@@ -17,10 +17,15 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
+import { usePersistedState } from '@/shared/lib/use-persisted-state';
+
+// Keeps the home workspace rail sizes stable across reloads.
+const HOME_PANELS_STORAGE_KEY = 'openscene-layout:home-panels';
+const PROJECT_RAIL_OPEN_KEY = 'openscene-layout:project-rail-open';
 
 export function ModernDashboard() {
   const [activeTab, setActiveTab] = useState('home');
-  const [projectRailOpen, setProjectRailOpen] = useState(true);
+  const [projectRailOpen, setProjectRailOpen] = usePersistedState(PROJECT_RAIL_OPEN_KEY, true);
   const { currentProjectId, loadProjects, getCurrentProject } = useProjectStore();
   const { loadMessages } = useChatStore();
 
@@ -46,15 +51,21 @@ export function ModernDashboard() {
   };
 
   const renderHome = () => (
-    <ResizablePanelGroup direction="horizontal" className="min-h-0 min-w-0 flex-1 overflow-hidden">
+    <ResizablePanelGroup
+      direction="horizontal"
+      autoSaveId={HOME_PANELS_STORAGE_KEY}
+      className="min-h-0 min-w-0 flex-1 overflow-hidden"
+    >
       {projectRailOpen && (
         <>
           <ResizablePanel
             id="workspace-rail"
             order={1}
             defaultSize={20}
-            minSize={14}
-            maxSize={32}
+            minSize={16}
+            maxSize={30}
+            collapsible
+            collapsedSize={4}
             className="min-w-0 overflow-hidden"
           >
             <ModernSubSidebar onToggle={() => setProjectRailOpen(false)} />

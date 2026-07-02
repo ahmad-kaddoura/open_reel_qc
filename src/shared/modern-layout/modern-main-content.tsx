@@ -44,6 +44,7 @@ import { WorkflowView, useWorkflowStore } from "@/features/workflow";
 import { TimelineView } from "@/features/timeline/timeline-view";
 import { useProjectStore } from "@/features/project/store";
 import { useSettingsStore } from "@/features/settings/store";
+import { usePersistedState } from "@/shared/lib/use-persisted-state";
 import type {
   ChatAttachment,
   CreativeWorkflowPlan,
@@ -64,6 +65,10 @@ type ModernMainContentProps = {
   projectRailOpen?: boolean;
   onToggleProjectRail?: () => void;
 };
+
+// Stable storage keys so panel widths and the inspector toggle survive reloads.
+const WORKSPACE_PANELS_STORAGE_KEY = "openscene-layout:workspace-panels";
+const INSPECTOR_OPEN_KEY = "openscene-layout:inspector-open";
 
 const CREATIVE_STEPS: Array<{
   id: "concept" | ProductionStep | "final";
@@ -419,7 +424,7 @@ function AgentWorkspace({
   const setPhase = useProjectStore((s) => s.setPhase);
   const progress = projectProgress(project);
   const chatOpen = true;
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = usePersistedState(INSPECTOR_OPEN_KEY, false);
   const contentMode = project.currentPhase === "workflow" || project.currentPhase === "timeline";
 
   return (
@@ -447,7 +452,7 @@ function AgentWorkspace({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
           <ViewButton active={project.currentPhase === "chat"} icon={MessageSquareText} label="Agent" onClick={() => setPhase("chat")} />
           <ViewButton active={project.currentPhase === "workflow"} icon={Layers3} label="Workflow" onClick={() => setPhase("workflow")} />
           <ViewButton active={project.currentPhase === "timeline"} icon={Film} label="Timeline" onClick={() => setPhase("timeline")} />
@@ -463,15 +468,21 @@ function AgentWorkspace({
         </div>
       </div>
 
-      <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1 overflow-hidden">
+      <ResizablePanelGroup
+        direction="horizontal"
+        autoSaveId={WORKSPACE_PANELS_STORAGE_KEY}
+        className="min-h-0 flex-1 overflow-hidden"
+      >
         {chatOpen && (
           <>
             <ResizablePanel
               id="agent-chat"
               order={1}
               defaultSize={28}
-              minSize={18}
+              minSize={22}
               maxSize={46}
+              collapsible
+              collapsedSize={6}
               className="min-w-0 overflow-hidden border-r border-border bg-card"
             >
               <ChatView />
@@ -483,7 +494,7 @@ function AgentWorkspace({
           id="agent-stage"
           order={2}
           defaultSize={inspectorOpen ? (chatOpen ? 50 : 78) : chatOpen ? 72 : 100}
-          minSize={34}
+          minSize={40}
           className="min-w-0 overflow-hidden"
         >
           <main className="h-full min-w-0 overflow-hidden bg-background">
