@@ -6,20 +6,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Grid3X3, Monitor, Moon, Sun } from 'lucide-react';
+import { Grid3X3, Monitor, Moon, PanelLeft, Sparkles, Sun } from 'lucide-react';
 import { useSettingsStore } from '@/features/settings/store';
 
 export function AppearanceTab() {
   const settings = useSettingsStore((s) => s.settings);
+  const setLayout = useSettingsStore((s) => s.setLayout);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const setEdgeLabelPlacement = useSettingsStore((s) => s.setEdgeLabelPlacement);
   const updateCanvasGrid = useSettingsStore((s) => s.updateCanvasGrid);
 
   return (
     <>
-      <p className="text-sm text-muted-foreground">Customize the app theme and workflow canvas display.</p>
+      <p className="text-sm text-muted-foreground">Customize workspace layout, theme, and workflow canvas display.</p>
       <Card>
         <CardContent className="p-4 space-y-4">
+          <div>
+            <Label className="text-sm font-medium">Workspace layout</Label>
+            <p className="text-xs text-muted-foreground mt-1 mb-2">
+              Switch between the modern assistant workspace and the classic phase-based workflow.
+            </p>
+            <div className="flex gap-2">
+              {[
+                { id: 'modern' as const, icon: Sparkles, label: 'Modern' },
+                { id: 'classic' as const, icon: PanelLeft, label: 'Classic' },
+              ].map((layout) => (
+                <button
+                  key={layout.id}
+                  type="button"
+                  onClick={() => setLayout(layout.id)}
+                  className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border transition-all ${
+                    (settings.layout ?? 'modern') === layout.id
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/30'
+                  }`}
+                >
+                  <layout.icon className="w-4 h-4" />
+                  <span className="text-sm">{layout.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
           <div>
             <Label className="text-sm font-medium">Theme</Label>
             <div className="flex gap-2 mt-2">

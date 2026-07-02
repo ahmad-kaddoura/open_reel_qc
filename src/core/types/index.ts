@@ -448,11 +448,14 @@ export interface PromptLibraryItem {
 
 export type PromptOverrides = Record<string, string>;
 
+export type WorkspaceLayout = 'modern' | 'classic';
+
 // ============= App Settings =============
 export interface AppSettings {
   agentConfigs: Record<AgentType, AgentConfig>;
   exportPresets: ExportPreset[];
   costControls: CostControls;
+  layout: WorkspaceLayout;
   theme: 'light' | 'dark' | 'system';
   defaultAspectRatio: AspectRatio;
   defaultPlatform: TargetPlatform;

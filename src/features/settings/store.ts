@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene, PromptOverrides } from '@/core/types';
+import type { AppSettings, AgentType, AgentConfig, ExportPreset, BrandKit, Character, CostControls, GenerationEffort, Scene, PromptOverrides, WorkspaceLayout } from '@/core/types';
 import { DEFAULT_AGENT_CONFIGS, DEFAULT_COST_CONTROLS, DEFAULT_GENERATION_MODELS, EXPORT_PRESETS, DEFAULT_SCENE_PROMPT_TEMPLATE, GENERATION_MODEL_PRESETS } from '@/core/config';
 import { DEFAULT_PROMPT_LIBRARY, getDefaultPrompt } from '@/core/prompts';
 import { applyThemeClass } from '@/features/settings/theme-utils';
@@ -22,8 +22,9 @@ interface SettingsState {
   // Cost controls
   updateCostControls: (updates: Partial<CostControls>) => void;
 
-  // Theme
+  // Theme & layout
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setLayout: (layout: WorkspaceLayout) => void;
 
   // Defaults
   setDefaultAspectRatio: (ratio: AppSettings['defaultAspectRatio']) => void;
@@ -43,6 +44,7 @@ const defaultSettings: AppSettings = {
   agentConfigs: DEFAULT_AGENT_CONFIGS,
   exportPresets: EXPORT_PRESETS,
   costControls: DEFAULT_COST_CONTROLS,
+  layout: 'modern',
   theme: 'dark',
   defaultAspectRatio: '9:16',
   defaultPlatform: 'tiktok',
@@ -113,6 +115,10 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => {
         set((s) => { s.settings.theme = theme; });
         applyThemeClass(theme);
+      },
+
+      setLayout: (layout) => {
+        set((s) => { s.settings.layout = layout; });
       },
 
       setDefaultAspectRatio: (ratio) => {

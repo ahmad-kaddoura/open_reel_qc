@@ -18,11 +18,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 
-interface ModernDashboardProps {
-  onToggleClassic: () => void;
-}
-
-export function ModernDashboard({ onToggleClassic }: ModernDashboardProps) {
+export function ModernDashboard() {
   const [activeTab, setActiveTab] = useState('home');
   const [projectRailOpen, setProjectRailOpen] = useState(true);
   const { currentProjectId, loadProjects, getCurrentProject } = useProjectStore();
@@ -83,11 +79,7 @@ export function ModernDashboard({ onToggleClassic }: ModernDashboardProps) {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background flex">
-      <ModernSidebar 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-        onToggleClassic={onToggleClassic} 
-      />
+      <ModernSidebar activeTab={activeTab} onTabChange={setActiveTab} />
       {activeTab === 'home' ? renderHome() : renderContent()}
     </div>
   );

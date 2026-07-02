@@ -19,7 +19,6 @@ import { BrandKitView } from "@/features/brand-kit/brand-kit-view";
 import { AssetLibraryView } from "@/features/assets/asset-library-view";
 import { UsageView } from "@/features/usage/usage-view";
 import { ModernDashboard } from "@/shared/modern-layout/modern-dashboard";
-import { Sparkles } from "lucide-react";
 import type { ProjectPhase } from "@/core/types";
 
 type AppView = "project" | "settings" | "brandkit" | "assets" | "usage";
@@ -30,7 +29,7 @@ function normalizePhase(phase: ProjectPhase): ProjectPhase {
   return phase;
 }
 
-function ClassicDashboard({ onToggleModern }: { onToggleModern: () => void }) {
+function ClassicDashboard() {
   const { currentProjectId, loadProjects, getCurrentProject } =
     useProjectStore();
   const { loadMessages } = useChatStore();
@@ -125,25 +124,16 @@ function ClassicDashboard({ onToggleModern }: { onToggleModern: () => void }) {
           {renderMainContent()}
         </ResizablePanel>
       </ResizablePanelGroup>
-
-      {/* Floating button to return to Modern UI */}
-      <button
-        onClick={onToggleModern}
-        className="absolute bottom-6 right-6 flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm font-medium z-50"
-      >
-        <Sparkles className="w-4 h-4" />
-        Modern UI
-      </button>
     </div>
   );
 }
 
 export default function Home() {
-  const [isModernTheme, setIsModernTheme] = useState(true);
+  const layout = useSettingsStore((s) => s.settings.layout ?? "modern");
 
-  if (isModernTheme) {
-    return <ModernDashboard onToggleClassic={() => setIsModernTheme(false)} />;
+  if (layout === "modern") {
+    return <ModernDashboard />;
   }
 
-  return <ClassicDashboard onToggleModern={() => setIsModernTheme(true)} />;
+  return <ClassicDashboard />;
 }

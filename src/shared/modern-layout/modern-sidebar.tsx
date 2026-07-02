@@ -1,15 +1,14 @@
 'use client';
 
-import { Clapperboard, Home, Palette, LayoutGrid, Folder, Undo2, Settings, Gauge } from 'lucide-react';
+import { Clapperboard, Home, Palette, LayoutGrid, Folder, Settings, Gauge } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ModernSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onToggleClassic: () => void;
 }
 
-export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: ModernSidebarProps) {
+export function ModernSidebar({ activeTab, onTabChange }: ModernSidebarProps) {
   const tabs = [
     { id: 'home', icon: Home, label: 'Home' },
     { id: 'avatar', icon: Gauge, label: 'Usage' },
@@ -54,25 +53,8 @@ export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: Moder
         })}
       </nav>
 
-      {/* Bottom Actions */}
-      <div className="flex flex-col items-center gap-2 mt-auto">
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onToggleClassic}
-              aria-label="Switch to Classic View"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-            >
-              <Undo2 className="w-5 h-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="font-medium">
-            Switch to Classic View
-          </TooltipContent>
-        </Tooltip>
-
-        {/* User Profile placeholder */}
-        <button className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 text-white font-semibold text-sm flex items-center justify-center mt-1">
+      <div className="flex flex-col items-center mt-auto">
+        <button className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 text-white font-semibold text-sm flex items-center justify-center">
           A
         </button>
       </div>
