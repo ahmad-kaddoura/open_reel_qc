@@ -20,23 +20,23 @@ export function SettingsView() {
         </div>
 
         <Tabs defaultValue="api-keys" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-3 xl:grid-cols-6">
-            <TabsTrigger value="api-keys" className="gap-1.5 text-xs">
+          <TabsList className="flex h-auto w-full flex-wrap gap-1">
+            <TabsTrigger value="api-keys" className="flex-none text-xs">
               <KeyRound className="w-3.5 h-3.5" /> API Keys
             </TabsTrigger>
-            <TabsTrigger value="prompts" className="gap-1.5 text-xs">
+            <TabsTrigger value="prompts" className="flex-none text-xs">
               <FileText className="w-3.5 h-3.5" /> Prompts
             </TabsTrigger>
-            <TabsTrigger value="agents" className="gap-1.5 text-xs">
+            <TabsTrigger value="agents" className="flex-none text-xs">
               <Bot className="w-3.5 h-3.5" /> Agents
             </TabsTrigger>
-            <TabsTrigger value="export" className="gap-1.5 text-xs">
+            <TabsTrigger value="export" className="flex-none text-xs">
               <Download className="w-3.5 h-3.5" /> Export
             </TabsTrigger>
-            <TabsTrigger value="limits" className="gap-1.5 text-xs">
+            <TabsTrigger value="limits" className="flex-none text-xs">
               <Shield className="w-3.5 h-3.5" /> Controls
             </TabsTrigger>
-            <TabsTrigger value="appearance" className="gap-1.5 text-xs">
+            <TabsTrigger value="appearance" className="flex-none text-xs">
               <Sun className="w-3.5 h-3.5" /> Appearance
             </TabsTrigger>
           </TabsList>

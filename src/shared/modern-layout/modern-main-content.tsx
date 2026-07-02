@@ -306,7 +306,7 @@ function AgentHome() {
     <div className="relative h-full overflow-hidden bg-background bg-[radial-gradient(circle_at_top,rgba(45,212,191,0.18),transparent_34%)]">
       <TopActions />
       <ScrollArea className="h-full">
-        <div className="mx-auto flex min-h-full max-w-6xl flex-col px-8 pb-12 pt-16">
+        <div className="mx-auto flex min-h-full max-w-6xl flex-col px-4 pb-12 pt-16 sm:px-8">
           <section className="mb-10 text-center">
             <Badge variant="outline" className="mb-4 border-primary/20 bg-primary/10 text-primary shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
@@ -424,13 +424,13 @@ function AgentWorkspace({
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden bg-background">
-      <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/92 px-4 py-3 backdrop-blur">
+      <div className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card/92 px-4 py-3 backdrop-blur sm:flex-nowrap sm:gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {onToggleProjectRail && !projectRailOpen && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted"
+              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted"
               onClick={onToggleProjectRail}
               aria-label="Show workspace panel"
               title="Show workspace panel"
@@ -447,7 +447,7 @@ function AgentWorkspace({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <ViewButton active={project.currentPhase === "chat"} icon={MessageSquareText} label="Agent" onClick={() => setPhase("chat")} />
           <ViewButton active={project.currentPhase === "workflow"} icon={Layers3} label="Workflow" onClick={() => setPhase("workflow")} />
           <ViewButton active={project.currentPhase === "timeline"} icon={Film} label="Timeline" onClick={() => setPhase("timeline")} />
@@ -458,7 +458,7 @@ function AgentWorkspace({
             onClick={() => setInspectorOpen((value) => !value)}
           >
             {inspectorOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-            Details
+            <span className="hidden sm:inline">Details</span>
           </Button>
         </div>
       </div>
@@ -533,9 +533,11 @@ function ViewButton({
       size="sm"
       className="rounded-full"
       onClick={onClick}
+      aria-label={label}
+      title={label}
     >
       <Icon className="h-4 w-4" />
-      {label}
+      <span className="hidden sm:inline">{label}</span>
     </Button>
   );
 }

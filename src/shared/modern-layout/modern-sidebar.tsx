@@ -22,12 +22,12 @@ export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: Moder
   return (
     <div className="w-16 h-full flex flex-col items-center py-4 bg-sidebar border-r border-sidebar-border shadow-sm z-20 shrink-0">
       {/* Logo */}
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center mb-8 shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center mb-6 shadow-sm">
         <Clapperboard className="w-5 h-5 text-white" />
       </div>
 
       {/* Main Nav */}
-      <div className="flex flex-col gap-3 w-full px-2 flex-1">
+      <nav className="flex flex-col gap-2 w-full items-center flex-1">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -35,14 +35,15 @@ export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: Moder
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onTabChange(tab.id)}
-                  className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+                  aria-label={tab.label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
                     isActive
-                      ? 'bg-cyan-50 text-cyan-700 font-medium'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      ? 'bg-foreground text-background shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  <tab.icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : ''}`} />
-                  <span className="text-[10px]">{tab.label}</span>
+                  <tab.icon className={`w-5 h-5 ${isActive ? 'stroke-[2.25px]' : ''}`} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right" className="font-medium">
@@ -51,27 +52,27 @@ export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: Moder
             </Tooltip>
           );
         })}
-      </div>
+      </nav>
 
       {/* Bottom Actions */}
-      <div className="flex flex-col gap-2 w-full px-2 mt-auto">
+      <div className="flex flex-col items-center gap-2 mt-auto">
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <button
               onClick={onToggleClassic}
-              className="w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-all"
+              aria-label="Switch to Classic View"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
             >
               <Undo2 className="w-5 h-5" />
-              <span className="text-[10px]">Classic</span>
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" className="font-medium">
             Switch to Classic View
           </TooltipContent>
         </Tooltip>
-        
+
         {/* User Profile placeholder */}
-        <button className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 text-white font-semibold text-sm flex items-center justify-center mx-auto mt-2">
+        <button className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 text-white font-semibold text-sm flex items-center justify-center mt-1">
           A
         </button>
       </div>
