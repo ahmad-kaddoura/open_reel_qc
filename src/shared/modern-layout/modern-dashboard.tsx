@@ -95,7 +95,7 @@ export function ModernDashboard({ onToggleClassic }: ModernDashboardProps) {
 
 function FullWidthView({ children }: { children: ReactNode }) {
   return (
-    <main className="min-w-0 flex-1 overflow-hidden bg-slate-50">
+    <main className="min-w-0 flex-1 overflow-hidden bg-background">
       {children}
     </main>
   );

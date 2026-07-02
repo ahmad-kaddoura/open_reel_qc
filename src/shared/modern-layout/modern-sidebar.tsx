@@ -20,7 +20,7 @@ export function ModernSidebar({ activeTab, onTabChange, onToggleClassic }: Moder
   ];
 
   return (
-    <div className="w-16 h-full flex flex-col items-center py-4 bg-white border-r border-slate-200 shadow-sm z-20 shrink-0">
+    <div className="w-16 h-full flex flex-col items-center py-4 bg-sidebar border-r border-sidebar-border shadow-sm z-20 shrink-0">
       {/* Logo */}
       <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-500 flex items-center justify-center mb-8 shadow-sm">
         <Clapperboard className="w-5 h-5 text-white" />

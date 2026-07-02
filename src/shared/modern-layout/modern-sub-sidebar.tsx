@@ -45,7 +45,7 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
   );
 
   return (
-    <div className="z-10 flex h-full w-full shrink-0 flex-col border-r border-slate-200 bg-white">
+    <div className="z-10 flex h-full w-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="p-4">
         <div className="flex items-start gap-2">
           {onToggle && (
@@ -53,7 +53,7 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
               type="button"
               variant="ghost"
               size="icon"
-              className="mt-0.5 h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+              className="mt-0.5 h-8 w-8 rounded-full text-sidebar-accent-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onClick={onToggle}
               aria-label="Hide workspace panel"
               title="Hide workspace panel"
@@ -62,15 +62,15 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
             </Button>
           )}
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-950">Workspace</h2>
-            <p className="text-xs text-slate-500">Projects and review flow</p>
+            <h2 className="text-lg font-semibold text-sidebar-foreground">Workspace</h2>
+            <p className="text-xs text-muted-foreground">Projects and review flow</p>
           </div>
         </div>
       </div>
 
       <div className="px-4 pb-4">
         <Button
-          className="w-full gap-2 rounded-full border-0 bg-cyan-100 font-medium text-cyan-800 hover:bg-cyan-200"
+          className="w-full gap-2 rounded-full border-0 bg-primary/15 font-medium text-primary hover:bg-primary/25"
           variant="outline"
           onClick={() => createProject("Untitled video workspace", "New AI video production workspace")}
         >
@@ -80,24 +80,24 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
       </div>
 
       <ScrollArea className="flex-1 px-4">
-        <section className="mb-5 rounded-[8px] border border-slate-200 bg-white p-1 shadow-sm">
+        <section className="mb-5 rounded-[8px] border border-sidebar-border bg-sidebar-accent/40 p-1 shadow-sm">
           <button
             type="button"
             onClick={() => setChecklistOpen((value) => !value)}
-            className="flex w-full items-center justify-between rounded-[6px] px-3 py-2 text-sm font-medium hover:bg-slate-50"
+            className="flex w-full items-center justify-between rounded-[6px] px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent"
           >
             <span className="flex items-center gap-2">
-              <ListChecks className="h-4 w-4 text-cyan-600" />
+              <ListChecks className="h-4 w-4 text-primary" />
               Review checklist
             </span>
             <span className="flex items-center gap-2">
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+              <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-xs text-muted-foreground">
                 {completedCount}/{getStartedSteps.length}
               </span>
               {checklistOpen ? (
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               )}
             </span>
           </button>
@@ -107,14 +107,14 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
               {getStartedSteps.map((step) => (
                 <div
                   key={step.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-[6px] px-3 py-2 text-sm transition-colors hover:bg-slate-50"
+                  className="flex cursor-pointer items-center gap-3 rounded-[6px] px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
                 >
                   {step.completed ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-cyan-500" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                   ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-slate-400" />
+                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className={step.completed ? "text-slate-500" : "text-slate-900"}>{step.label}</span>
+                  <span className={step.completed ? "text-muted-foreground" : "text-sidebar-foreground"}>{step.label}</span>
                 </div>
               ))}
             </div>
@@ -125,7 +125,7 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
           <button
             type="button"
             onClick={() => setHistoryOpen((value) => !value)}
-            className="mb-2 flex w-full items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-slate-500"
+            className="mb-2 flex w-full items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
           >
             <span className="flex items-center gap-2">
               <History className="h-3.5 w-3.5" />
@@ -143,22 +143,22 @@ export function ModernSubSidebar({ onToggle }: { onToggle?: () => void }) {
                   onClick={() => openProject(project.id)}
                   className={`group w-full rounded-[8px] p-3 text-left transition-colors ${
                     currentProjectId === project.id
-                      ? "bg-cyan-50 text-cyan-950 ring-1 ring-cyan-100"
-                      : "hover:bg-slate-50"
+                      ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+                      : "hover:bg-sidebar-accent"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-medium">{project.name}</div>
-                    {currentProjectId === project.id && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-cyan-600" />}
+                    <div className="truncate text-sm font-medium text-sidebar-foreground">{project.name}</div>
+                    {currentProjectId === project.id && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-primary" />}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-muted-foreground">
                     {project.currentPhase} · {new Date(project.updatedAt).toLocaleDateString()}
                   </div>
                 </button>
               ))}
 
               {sortedProjects.length === 0 && (
-                <div className="rounded-[8px] border border-dashed border-slate-200 p-3 text-xs leading-5 text-slate-500">
+                <div className="rounded-[8px] border border-dashed border-sidebar-border p-3 text-xs leading-5 text-muted-foreground">
                   New projects will appear here once you create your first workspace.
                 </div>
               )}
